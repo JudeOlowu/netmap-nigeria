@@ -421,40 +421,60 @@ function placeMarker(lat,lon,accuracy,source){
 function tryIPFallback(){
   setYAH('Locating via IP...','var(--muted)');
   var SERVICES=[
-    {url:'https://ipapi.co/json/',   parse:function(d){return d.latitude?{lat:d.latitude,lon:d.longitude,city:d.city}:null;}},
-    {url:'https://ipwho.is/',        parse:function(d){return d.success?{lat:d.latitude,lon:d.longitude,city:d.city}:null;}},
-    {url:'https://ip-api.com/json/?fields=lat,lon,city,status',parse:function(d){return d.status==='success'?{lat:d.lat,lon:d.lon,city:d.city}:null;}},
+    {url:'https://ipapi.co/json/',   parse:function(d){return d.latitude?{lat:d.latitude,lon:d.longitude}:null;}},
+    {url:'https://ipwho.is/',        parse:function(d){return d.success?{lat:d.latitude,lon:d.longitude}:null;}},
+    {url:'https://ip-api.com/json/?fields=lat,lon,status',parse:function(d){return d.status==='success'?{lat:d.lat,lon:d.lon}:null;}},
   ];
   var i=0;
   function next(){
     if(i>=SERVICES.length){
-      setYAH('Could not determine location.<br>Select your city manually above.','var(--red)');
+      // All IP services failed or Nigeria ISP routed wrong — prompt city select
+      setYAH('Select your city from the dropdown above to see your local connectivity.','var(--amber)');
       var btn=document.getElementById('locate-btn');
       btn.textContent='⊕ LOCATE ME'; btn.classList.remove('locating','locked');
+      // Flash the city picker to draw attention
+      var picker=document.getElementById('city-picker');
+      picker.style.boxShadow='0 0 0 2px var(--amber)';
+      setTimeout(function(){picker.style.boxShadow='';},3000);
       return;
     }
     var svc=SERVICES[i++];
     fetch(svc.url).then(function(r){return r.json();}).then(function(d){
       var pos=svc.parse(d);
       if(!pos) throw new Error('bad');
-      // Auto-load city data
-      if(pos.city){
-        var key=CITY_NAME_MAP[pos.city.toLowerCase()];
-        if(key && !TILES.length){
-          loadCity(key);
-        }
-      }
-      placeMarker(pos.lat,pos.lon,2000,'IP');
-      map.flyTo([pos.lat,pos.lon],12,{duration:1.2});
+      // Place marker at IP location but DO NOT auto-load city
+      // Nigerian ISPs route through Lagos regardless of actual location
+      placeMarker(pos.lat,pos.lon,5000,'IP');
+      // Prompt user to confirm their city
+      setYAH('IP located you — but Nigerian ISPs often route through Lagos.<br>'+
+             '<b style="color:var(--cyan)">Select your actual city above</b> for accurate data.','var(--amber)');
+      document.getElementById('yah-title').textContent='CONFIRM YOUR CITY';
     }).catch(next);
   }
   next();
 }
 
+function nearestCity(lat,lon){
+  var best=null,bd=Infinity;
+  Object.keys(CITY_META).forEach(function(k){
+    var m=CITY_META[k];
+    var d=(m.lat-lat)*(m.lat-lat)+(m.lon-lon)*(m.lon-lon);
+    if(d<bd){bd=d;best=k;}
+  });
+  return best;
+}
+
 function onGPSFound(e){
   if(gpsTimeoutId){clearTimeout(gpsTimeoutId);gpsTimeoutId=null;}
-  placeMarker(e.latlng.lat,e.latlng.lng,e.accuracy,'GPS');
-  map.flyTo([e.latlng.lat,e.latlng.lng],13,{duration:1});
+  var lat=e.latlng.lat, lon=e.latlng.lng;
+  placeMarker(lat,lon,e.accuracy,'GPS');
+  map.flyTo([lat,lon],13,{duration:1});
+  // Auto-load nearest city from GPS coords — accurate since it uses real coordinates
+  var key=nearestCity(lat,lon);
+  if(key && !TILES.length){
+    loadCity(key);
+    document.getElementById('yah-title').textContent='GPS LOCATION';
+  }
 }
 function onGPSError(){ tryIPFallback(); }
 
@@ -471,11 +491,16 @@ function startLocation(){
   }
   btn.textContent='⊕ ACQUIRING...'; btn.classList.add('locating');
   // Always race GPS vs IP — IP wins on desktops with no chip (5s)
+  // Mobile phones have GPS chips — use high accuracy and give it 12s
+  // Desktop fallback to IP after 5s (no GPS chip)
+  var isMobile=/Mobi|Android|iPhone/i.test(navigator.userAgent);
   if(navigator.geolocation){
     watchId=navigator.geolocation.watchPosition(onGPSFound,onGPSError,
-      {enableHighAccuracy:false,timeout:8000,maximumAge:10000});
+      {enableHighAccuracy:true, timeout:isMobile?12000:8000, maximumAge:5000});
   }
-  gpsTimeoutId=setTimeout(function(){gpsTimeoutId=null;tryIPFallback();},5000);
+  gpsTimeoutId=setTimeout(function(){
+    gpsTimeoutId=null;tryIPFallback();
+  }, isMobile?12000:5000);
 }
 
 // ── Click inspect ─────────────────────────────────────────────────────────────
