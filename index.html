@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>NetMap Nigeria — Internet Connectivity</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<style>
+:root{
+  --bg:#080c12;--surface:#0d1420;--border:#1a2540;
+  --cyan:#00e5ff;--green:#39ff6e;--amber:#ffb300;--red:#ff4757;
+  --text:#cdd6f4;--muted:#6b7280;--panel-bg:rgba(8,12,18,0.93);
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:var(--bg);font-family:'DM Sans',sans-serif;color:var(--text);
+  height:100vh;display:flex;flex-direction:column;overflow:hidden;}
+
+header{display:flex;align-items:center;justify-content:space-between;
+  padding:12px 20px;background:var(--surface);border-bottom:1px solid var(--border);
+  z-index:1000;flex-shrink:0;gap:12px;flex-wrap:wrap;}
+.logo{display:flex;align-items:center;gap:10px;}
+.logo-icon{width:32px;height:32px;border:1.5px solid var(--cyan);border-radius:4px;position:relative;flex-shrink:0;}
+.logo-icon::before{content:'';position:absolute;top:50%;left:50%;
+  transform:translate(-50%,-50%);width:14px;height:14px;border-radius:50%;
+  background:radial-gradient(circle,var(--cyan) 0%,transparent 70%);
+  animation:pulse 2s ease-in-out infinite;}
+@keyframes pulse{0%,100%{opacity:0.4;transform:translate(-50%,-50%) scale(0.8)}
+  50%{opacity:1;transform:translate(-50%,-50%) scale(1.1)}}
+.logo h1{font-family:'Space Mono',monospace;font-size:14px;letter-spacing:0.08em;color:var(--cyan);}
+.logo span{font-size:11px;color:var(--muted);font-family:'Space Mono',monospace;}
+.header-right{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+
+/* City selector */
+.city-select-wrap{position:relative;}
+select#city-picker{
+  background:var(--surface);border:1px solid var(--cyan);color:var(--cyan);
+  font-family:'Space Mono',monospace;font-size:11px;letter-spacing:0.06em;
+  padding:6px 28px 6px 12px;border-radius:3px;cursor:pointer;
+  appearance:none;-webkit-appearance:none;outline:none;}
+.city-select-wrap::after{content:'▾';position:absolute;right:10px;top:50%;
+  transform:translateY(-50%);color:var(--cyan);pointer-events:none;font-size:11px;}
+
+.locate-btn{padding:6px 14px;border-radius:3px;font-family:'Space Mono',monospace;
+  font-size:11px;cursor:pointer;border:1px solid var(--green);color:var(--green);
+  background:transparent;transition:all 0.15s;letter-spacing:0.06em;}
+.locate-btn:hover{background:rgba(57,255,110,0.1);}
+.locate-btn.locating{border-color:var(--amber);color:var(--amber);}
+.locate-btn.locked{border-color:var(--green);color:var(--green);background:rgba(57,255,110,0.08);}
+
+.toggles{display:flex;gap:4px;}
+.toggle-btn{padding:6px 12px;border-radius:3px;font-family:'Space Mono',monospace;
+  font-size:11px;letter-spacing:0.06em;cursor:pointer;background:transparent;
+  border:1px solid var(--border);color:var(--muted);transition:all 0.15s;}
+.toggle-btn.active{background:var(--cyan);border-color:var(--cyan);color:#000;font-weight:700;}
+.toggle-btn:hover:not(.active){border-color:var(--cyan);color:var(--cyan);}
+
+.stats-bar{display:flex;gap:1px;background:var(--border);border-bottom:1px solid var(--border);
+  flex-shrink:0;z-index:999;}
+.stat{flex:1;padding:8px 16px;background:var(--surface);}
+.stat-label{font-family:'Space Mono',monospace;font-size:9px;letter-spacing:0.1em;
+  color:var(--muted);text-transform:uppercase;}
+.stat-val{font-family:'Space Mono',monospace;font-size:15px;font-weight:700;margin-top:2px;}
+
+.main{flex:1;display:flex;overflow:hidden;}
+#map{flex:1;cursor:crosshair;}
+
+.side-panel{width:240px;background:var(--panel-bg);border-left:1px solid var(--border);
+  display:flex;flex-direction:column;overflow:hidden;flex-shrink:0;}
+.panel-section{padding:14px 16px;border-bottom:1px solid var(--border);}
+.panel-title{font-family:'Space Mono',monospace;font-size:9px;letter-spacing:0.15em;
+  color:var(--muted);text-transform:uppercase;margin-bottom:10px;}
+
+.yah-card{background:rgba(0,229,255,0.04);border:1px solid rgba(0,229,255,0.15);
+  border-radius:4px;padding:12px;}
+.yah-dot{width:8px;height:8px;border-radius:50%;background:var(--cyan);
+  box-shadow:0 0 8px var(--cyan);flex-shrink:0;
+  animation:yah-pulse 1.5s ease-in-out infinite;}
+@keyframes yah-pulse{0%,100%{box-shadow:0 0 4px var(--cyan)}
+  50%{box-shadow:0 0 14px var(--cyan),0 0 28px rgba(0,229,255,0.3)}}
+.yah-header{display:flex;align-items:center;gap:8px;margin-bottom:10px;}
+.yah-title{font-family:'Space Mono',monospace;font-size:10px;color:var(--cyan);letter-spacing:0.08em;}
+.yah-metric{display:flex;justify-content:space-between;padding:3px 0;}
+.yah-metric-label{font-family:'Space Mono',monospace;font-size:10px;color:var(--muted);}
+.yah-metric-val{font-family:'Space Mono',monospace;font-size:12px;font-weight:700;}
+.yah-coords{font-family:'Space Mono',monospace;font-size:9px;color:var(--muted);
+  margin-top:8px;padding-top:8px;border-top:1px solid var(--border);line-height:1.7;}
+.yah-waiting{font-family:'Space Mono',monospace;font-size:10px;color:var(--muted);
+  text-align:center;padding:8px 0;line-height:1.6;}
+
+.legend-bar{height:8px;border-radius:2px;margin:8px 0;}
+.legend-labels{display:flex;justify-content:space-between;}
+.legend-labels span{font-family:'Space Mono',monospace;font-size:9px;color:var(--muted);}
+
+/* No-data banner */
+#no-data-banner{display:none;position:absolute;top:50%;left:50%;
+  transform:translate(-50%,-50%);z-index:800;
+  background:var(--panel-bg);border:1px solid var(--border);
+  border-radius:6px;padding:24px 32px;text-align:center;
+  font-family:'Space Mono',monospace;max-width:300px;backdrop-filter:blur(12px);}
+#no-data-banner h3{color:var(--amber);font-size:13px;margin-bottom:8px;}
+#no-data-banner p{color:var(--muted);font-size:11px;line-height:1.7;}
+
+/* Loading overlay */
+#loading{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+  z-index:900;font-family:'Space Mono',monospace;font-size:12px;color:var(--cyan);
+  background:var(--panel-bg);padding:16px 24px;border-radius:4px;
+  border:1px solid var(--border);backdrop-filter:blur(12px);}
+
+.source-badge{font-family:'Space Mono',monospace;font-size:9px;color:var(--muted);
+  padding:12px 16px;margin-top:auto;line-height:1.7;border-top:1px solid var(--border);}
+.source-badge a{color:var(--cyan);text-decoration:none;}
+::-webkit-scrollbar{width:4px;}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px;}
+.leaflet-tooltip{background:var(--panel-bg)!important;border:1px solid var(--border)!important;
+  color:var(--text)!important;font-family:'Space Mono',monospace!important;font-size:11px!important;
+  box-shadow:0 4px 20px rgba(0,0,0,0.5)!important;border-radius:3px!important;}
+.leaflet-tooltip-left::before,.leaflet-tooltip-right::before{display:none!important;}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon"></div>
+    <div>
+      <h1>NETMAP / NIGERIA</h1>
+      <span>Internet Connectivity · Ookla Q3 2025</span>
+    </div>
+  </div>
+  <div class="header-right">
+    <div class="city-select-wrap">
+      <select id="city-picker" onchange="loadCity(this.value)">
+        <option value="">— Select City —</option>
+        <option value="lagos">Lagos</option>
+        <option value="abuja">Abuja</option>
+        <option value="ibadan">Ibadan</option>
+        <option value="kano">Kano</option>
+        <option value="port_harcourt">Port Harcourt</option>
+        <option value="enugu">Enugu</option>
+        <option value="benin_city">Benin City</option>
+        <option value="kaduna">Kaduna</option>
+        <option value="ilorin">Ilorin</option>
+        <option value="jos">Jos</option>
+        <option value="aba">Aba</option>
+        <option value="warri">Warri</option>
+        <option value="calabar">Calabar</option>
+        <option value="zaria">Zaria</option>
+        <option value="asaba">Asaba</option>
+      </select>
+    </div>
+    <button class="locate-btn" id="locate-btn" onclick="startLocation()">⊕ LOCATE ME</button>
+    <div class="toggles">
+      <button class="toggle-btn active" id="btn-dl" onclick="setLayer('dl',this)">↓ DL</button>
+      <button class="toggle-btn" id="btn-ul" onclick="setLayer('ul',this)">↑ UL</button>
+      <button class="toggle-btn" id="btn-lat" onclick="setLayer('latency',this)">◎ MS</button>
+    </div>
+  </div>
+</header>
+
+<div class="stats-bar">
+  <div class="stat"><div class="stat-label">Median Download</div><div class="stat-val" style="color:var(--cyan)" id="s-dl">—</div></div>
+  <div class="stat"><div class="stat-label">Median Upload</div><div class="stat-val" style="color:var(--green)" id="s-ul">—</div></div>
+  <div class="stat"><div class="stat-label">Median Latency</div><div class="stat-val" style="color:var(--amber)" id="s-lat">—</div></div>
+  <div class="stat"><div class="stat-label">Tiles</div><div class="stat-val" id="s-tiles">—</div></div>
+</div>
+
+<div class="main" style="position:relative;">
+  <div id="map"></div>
+  <div id="loading">Loading map...</div>
+  <div id="no-data-banner">
+    <h3>No Data Available</h3>
+    <p id="no-data-msg">No Ookla speed test data found for this city. Try a nearby city or check back when more tests are available.</p>
+  </div>
+  <div class="side-panel">
+    <div class="panel-section">
+      <div class="panel-title">You Are Here</div>
+      <div class="yah-card">
+        <div class="yah-header">
+          <div class="yah-dot"></div>
+          <div class="yah-title" id="yah-title">LIVE LOCATION</div>
+        </div>
+        <div id="yah-content"><div class="yah-waiting">Press ⊕ LOCATE ME</div></div>
+      </div>
+    </div>
+    <div class="panel-section">
+      <div class="panel-title">Signal Legend</div>
+      <div id="legend-label" style="font-family:'Space Mono',monospace;font-size:10px;color:var(--cyan);margin-bottom:6px;">DOWNLOAD SPEED (Mbps)</div>
+      <div class="legend-bar" id="legend-bar" style="background:linear-gradient(to right,#0a2463,#1e6091,#48cae4,#90e0ef,#39ff6e);"></div>
+      <div class="legend-labels"><span id="leg-min">0</span><span id="leg-mid">24</span><span id="leg-max">48+</span></div>
+    </div>
+    <div class="panel-section" id="click-panel" style="display:none;">
+      <div class="panel-title">Tapped Point</div>
+      <div id="click-info"></div>
+    </div>
+    <div class="source-badge">
+      Data: Ookla Open Data Q3 2025<br>
+      <a href="https://github.com/teamookla/ookla-open-data" target="_blank">ookla-open-data ↗</a><br>
+      Built with Leaflet · CartoDB
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Map init ──────────────────────────────────────────────────────────────────
+const map = L.map('map',{center:[9.0,8.0],zoom:6,zoomControl:false});
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+  {maxZoom:19,attribution:'© CartoDB | © OSM'}).addTo(map);
+L.control.zoom({position:'bottomright'}).addTo(map);
+document.getElementById('loading').style.display='none';
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let TILES = [];
+let tileLayer = null;
+let currentMode = 'dl';
+let liveMarker = null, accuracyCircle = null, watchId = null, gpsTimeoutId = null;
+
+// ── City metadata (for map centering) ─────────────────────────────────────────
+const CITY_META = {
+  lagos:         {name:'Lagos',         lat:6.52,  lon:3.38},
+  abuja:         {name:'Abuja',         lat:9.05,  lon:7.40},
+  ibadan:        {name:'Ibadan',        lat:7.39,  lon:3.90},
+  kano:          {name:'Kano',          lat:12.00, lon:8.52},
+  port_harcourt: {name:'Port Harcourt', lat:4.85,  lon:7.05},
+  enugu:         {name:'Enugu',         lat:6.46,  lon:7.55},
+  benin_city:    {name:'Benin City',    lat:6.34,  lon:5.63},
+  kaduna:        {name:'Kaduna',        lat:10.52, lon:7.44},
+  ilorin:        {name:'Ilorin',        lat:8.50,  lon:4.55},
+  jos:           {name:'Jos',           lat:9.92,  lon:8.90},
+  aba:           {name:'Aba',           lat:5.12,  lon:7.37},
+  warri:         {name:'Warri',         lat:5.52,  lon:5.75},
+  calabar:       {name:'Calabar',       lat:4.95,  lon:8.33},
+  zaria:         {name:'Zaria',         lat:11.08, lon:7.72},
+  asaba:         {name:'Asaba',         lat:6.20,  lon:6.71},
+};
+
+// IP city name → data key
+const CITY_NAME_MAP = {
+  'lagos':'lagos','abuja':'abuja','ibadan':'ibadan','kano':'kano',
+  'port harcourt':'port_harcourt','enugu':'enugu','benin city':'benin_city',
+  'kaduna':'kaduna','ilorin':'ilorin','jos':'jos','aba':'aba',
+  'warri':'warri','calabar':'calabar','zaria':'zaria','asaba':'asaba',
+};
+
+// ── Load city data from data/ folder ─────────────────────────────────────────
+function loadCity(cityKey){
+  if(!cityKey) return;
+  document.getElementById('no-data-banner').style.display='none';
+  document.getElementById('loading').style.display='block';
+  document.getElementById('s-dl').textContent='—';
+  document.getElementById('s-ul').textContent='—';
+  document.getElementById('s-lat').textContent='—';
+  document.getElementById('s-tiles').textContent='—';
+
+  fetch(`data/${cityKey}.json`)
+    .then(r=>{
+      if(!r.ok) throw new Error('not found');
+      return r.json();
+    })
+    .then(tiles=>{
+      document.getElementById('loading').style.display='none';
+      if(!tiles||tiles.length===0){
+        showNoData(cityKey); return;
+      }
+      TILES = tiles;
+      renderStats();
+      renderLayer(currentMode);
+      const meta = CITY_META[cityKey];
+      if(meta) map.flyTo([meta.lat,meta.lon],12,{duration:1.2});
+      // Update picker to match
+      document.getElementById('city-picker').value=cityKey;
+    })
+    .catch(()=>{
+      document.getElementById('loading').style.display='none';
+      showNoData(cityKey);
+    });
+}
+
+function showNoData(cityKey){
+  const meta = CITY_META[cityKey]||{};
+  document.getElementById('no-data-msg').textContent=
+    `No Ookla data available for ${meta.name||cityKey}. ` +
+    `Either no speed tests were run here in Q3 2025, or the city filter returned 0 tiles. ` +
+    `Try Lagos or Ibadan.`;
+  document.getElementById('no-data-banner').style.display='block';
+  if(meta) map.flyTo([meta.lat,meta.lon],12,{duration:1});
+}
+
+// ── Stats ─────────────────────────────────────────────────────────────────────
+function median(arr){
+  const s=[...arr].sort((a,b)=>a-b);
+  const m=Math.floor(s.length/2);
+  return s.length%2===0?(s[m-1]+s[m])/2:s[m];
+}
+function renderStats(){
+  document.getElementById('s-dl').textContent  = median(TILES.map(t=>t.dl)).toFixed(1)+' Mbps';
+  document.getElementById('s-ul').textContent  = median(TILES.map(t=>t.ul)).toFixed(1)+' Mbps';
+  document.getElementById('s-lat').textContent = median(TILES.map(t=>t.latency)).toFixed(0)+' ms';
+  document.getElementById('s-tiles').textContent = TILES.length.toLocaleString();
+}
+
+// ── Colour ramp ───────────────────────────────────────────────────────────────
+function rampColor(t, mode){
+  var stops = (mode==='latency')
+    ? [[57,255,110],[255,179,0],[255,107,53],[255,71,87]]
+    : [[10,28,99],[30,96,145],[72,202,228],[57,255,110]];
+  var s=Math.min(t,0.999)*3, i=Math.floor(s), f=s-i;
+  var a=stops[i], b=stops[i+1];
+  return 'rgba('+Math.round(a[0]+(b[0]-a[0])*f)+','+
+                  Math.round(a[1]+(b[1]-a[1])*f)+','+
+                  Math.round(a[2]+(b[2]-a[2])*f)+',0.65)';
+}
+
+const LEGENDS = {
+  dl:     {label:'DOWNLOAD SPEED (Mbps)',min:'0',mid:'24',max:'48+',bar:'linear-gradient(to right,#0a2463,#1e6091,#48cae4,#90e0ef,#39ff6e)'},
+  ul:     {label:'UPLOAD SPEED (Mbps)',min:'0',mid:'9',max:'18+',bar:'linear-gradient(to right,#0d0d2b,#3a0ca3,#7209b7,#b5179e,#f72585)'},
+  latency:{label:'LATENCY — lower is better (ms)',min:'20',mid:'50',max:'80+',bar:'linear-gradient(to right,#39ff6e,#90e0ef,#ffb300,#ff6b35,#ff4757)'}
+};
+
+function renderLayer(mode){
+  if(tileLayer){ map.removeLayer(tileLayer); }
+  if(!TILES.length) return;
+
+  var mn=Infinity, mx=-Infinity;
+  for(var i=0;i<TILES.length;i++){
+    var v=mode==='latency'?TILES[i].latency:TILES[i][mode];
+    if(v<mn)mn=v; if(v>mx)mx=v;
+  }
+  var range=mx-mn||1;
+  var mRadius = TILES.length<200?2500:TILES.length<500?1800:TILES.length<2000?1000:600;
+
+  var group=L.layerGroup();
+  TILES.forEach(function(t){
+    var v=mode==='latency'?t.latency:t[mode];
+    var norm=(v-mn)/range;
+    if(mode==='latency') norm=1-norm;
+    L.circle([t.lat,t.lon],{
+      radius:mRadius, color:'transparent',
+      fillColor:rampColor(norm,mode), fillOpacity:0.72, weight:0
+    }).addTo(group);
+  });
+  group.addTo(map);
+  tileLayer=group;
+
+  var leg=LEGENDS[mode];
+  document.getElementById('legend-label').textContent=leg.label;
+  document.getElementById('legend-bar').style.background=leg.bar;
+  document.getElementById('leg-min').textContent=leg.min;
+  document.getElementById('leg-mid').textContent=leg.mid;
+  document.getElementById('leg-max').textContent=leg.max;
+}
+
+function setLayer(mode,btn){
+  currentMode=mode;
+  document.querySelectorAll('.toggle-btn').forEach(function(b){b.classList.remove('active');});
+  if(btn) btn.classList.add('active');
+  renderLayer(mode);
+}
+
+// ── Nearest tile ──────────────────────────────────────────────────────────────
+function nearestTile(lat,lon){
+  var best=null,bd=Infinity;
+  for(var i=0;i<TILES.length;i++){
+    var d=(TILES[i].lat-lat)*(TILES[i].lat-lat)+(TILES[i].lon-lon)*(TILES[i].lon-lon);
+    if(d<bd){bd=d;best=TILES[i];}
+  }
+  return best;
+}
+function speedColor(dl){ return dl>30?'var(--green)':dl>15?'var(--amber)':'var(--red)'; }
+
+// ── Live location ─────────────────────────────────────────────────────────────
+var liveIcon = L.divIcon({
+  className:'',
+  html:'<div style="position:relative;width:20px;height:20px;">' +
+       '<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);' +
+       'width:12px;height:12px;border-radius:50%;background:#00e5ff;border:2px solid #fff;' +
+       'box-shadow:0 0 0 2px #00e5ff;z-index:2;"></div>' +
+       '<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);' +
+       'width:12px;height:12px;border-radius:50%;background:rgba(0,229,255,0.4);' +
+       'animation:loc-ring 1.8s ease-out infinite;"></div></div>',
+  iconSize:[20,20],iconAnchor:[10,10]
+});
+
+function setYAH(msg,color){
+  document.getElementById('yah-content').innerHTML=
+    '<div class="yah-waiting" style="color:'+(color||'var(--muted)')+';text-align:left;font-size:10px;line-height:1.6;">'+msg+'</div>';
+}
+
+function placeMarker(lat,lon,accuracy,source){
+  if(liveMarker){
+    liveMarker.setLatLng([lat,lon]);
+    if(accuracyCircle) accuracyCircle.setLatLng([lat,lon]).setRadius(accuracy);
+  } else {
+    accuracyCircle=L.circle([lat,lon],{radius:accuracy,color:'rgba(0,229,255,0.3)',
+      fillColor:'rgba(0,229,255,0.05)',fillOpacity:1,weight:1}).addTo(map);
+    liveMarker=L.marker([lat,lon],{icon:liveIcon,zIndexOffset:1000}).addTo(map);
+  }
+  var btn=document.getElementById('locate-btn');
+  btn.textContent='⊕ TRACKING'; btn.classList.remove('locating'); btn.classList.add('locked');
+
+  // Auto-load city if no data loaded yet
+  var tile=nearestTile(lat,lon);
+  if(tile){
+    var c=speedColor(tile.dl);
+    document.getElementById('yah-title').textContent=source==='GPS'?'LIVE LOCATION':'IP LOCATION (approx)';
+    document.getElementById('yah-content').innerHTML=
+      '<div class="yah-metric"><span class="yah-metric-label">↓ Download</span>' +
+      '<span class="yah-metric-val" style="color:'+c+'">'+tile.dl+' Mbps</span></div>' +
+      '<div class="yah-metric"><span class="yah-metric-label">↑ Upload</span>' +
+      '<span class="yah-metric-val" style="color:#f72585">'+tile.ul+' Mbps</span></div>' +
+      '<div class="yah-metric"><span class="yah-metric-label">◎ Latency</span>' +
+      '<span class="yah-metric-val" style="color:var(--amber)">'+tile.latency+' ms</span></div>' +
+      '<div class="yah-coords">'+lat.toFixed(5)+'°N '+lon.toFixed(5)+'°E<br>~'+Math.round(accuracy)+'m accuracy</div>';
+  } else {
+    setYAH('Located — select your city above to see connectivity data.','var(--cyan)');
+  }
+}
+
+function tryIPFallback(){
+  setYAH('Locating via IP...','var(--muted)');
+  var SERVICES=[
+    {url:'https://ipapi.co/json/',   parse:function(d){return d.latitude?{lat:d.latitude,lon:d.longitude,city:d.city}:null;}},
+    {url:'https://ipwho.is/',        parse:function(d){return d.success?{lat:d.latitude,lon:d.longitude,city:d.city}:null;}},
+    {url:'https://ip-api.com/json/?fields=lat,lon,city,status',parse:function(d){return d.status==='success'?{lat:d.lat,lon:d.lon,city:d.city}:null;}},
+  ];
+  var i=0;
+  function next(){
+    if(i>=SERVICES.length){
+      setYAH('Could not determine location.<br>Select your city manually above.','var(--red)');
+      var btn=document.getElementById('locate-btn');
+      btn.textContent='⊕ LOCATE ME'; btn.classList.remove('locating','locked');
+      return;
+    }
+    var svc=SERVICES[i++];
+    fetch(svc.url).then(function(r){return r.json();}).then(function(d){
+      var pos=svc.parse(d);
+      if(!pos) throw new Error('bad');
+      // Auto-load city data
+      if(pos.city){
+        var key=CITY_NAME_MAP[pos.city.toLowerCase()];
+        if(key && !TILES.length){
+          loadCity(key);
+        }
+      }
+      placeMarker(pos.lat,pos.lon,2000,'IP');
+      map.flyTo([pos.lat,pos.lon],12,{duration:1.2});
+    }).catch(next);
+  }
+  next();
+}
+
+function onGPSFound(e){
+  if(gpsTimeoutId){clearTimeout(gpsTimeoutId);gpsTimeoutId=null;}
+  placeMarker(e.latlng.lat,e.latlng.lng,e.accuracy,'GPS');
+  map.flyTo([e.latlng.lat,e.latlng.lng],13,{duration:1});
+}
+function onGPSError(){ tryIPFallback(); }
+
+function startLocation(){
+  var btn=document.getElementById('locate-btn');
+  if(watchId!==null){
+    navigator.geolocation&&navigator.geolocation.clearWatch(watchId); watchId=null;
+    if(gpsTimeoutId){clearTimeout(gpsTimeoutId);gpsTimeoutId=null;}
+    if(liveMarker){map.removeLayer(liveMarker);liveMarker=null;}
+    if(accuracyCircle){map.removeLayer(accuracyCircle);accuracyCircle=null;}
+    btn.textContent='⊕ LOCATE ME'; btn.classList.remove('locating','locked');
+    setYAH('Press ⊕ LOCATE ME to start','');
+    return;
+  }
+  btn.textContent='⊕ ACQUIRING...'; btn.classList.add('locating');
+  // Always race GPS vs IP — IP wins on desktops with no chip (5s)
+  if(navigator.geolocation){
+    watchId=navigator.geolocation.watchPosition(onGPSFound,onGPSError,
+      {enableHighAccuracy:false,timeout:8000,maximumAge:10000});
+  }
+  gpsTimeoutId=setTimeout(function(){gpsTimeoutId=null;tryIPFallback();},5000);
+}
+
+// ── Click inspect ─────────────────────────────────────────────────────────────
+map.on('click',function(e){
+  if(!TILES.length) return;
+  var t=nearestTile(e.latlng.lat,e.latlng.lng);
+  if(!t) return;
+  var c=speedColor(t.dl);
+  document.getElementById('click-panel').style.display='block';
+  document.getElementById('click-info').innerHTML=
+    '<div style="font-family:\'Space Mono\',monospace;font-size:9px;color:var(--muted);margin-bottom:8px;">'+
+    t.lat.toFixed(4)+'°N '+t.lon.toFixed(4)+'°E</div>'+
+    '<div style="display:flex;justify-content:space-between;font-family:\'Space Mono\',monospace;font-size:11px;padding:3px 0;">'+
+    '<span style="color:var(--muted)">↓ Download</span><span style="color:'+c+';font-weight:700">'+t.dl+' Mbps</span></div>'+
+    '<div style="display:flex;justify-content:space-between;font-family:\'Space Mono\',monospace;font-size:11px;padding:3px 0;">'+
+    '<span style="color:var(--muted)">↑ Upload</span><span style="color:#f72585;font-weight:700">'+t.ul+' Mbps</span></div>'+
+    '<div style="display:flex;justify-content:space-between;font-family:\'Space Mono\',monospace;font-size:11px;padding:3px 0;">'+
+    '<span style="color:var(--muted)">◎ Latency</span><span style="color:var(--amber);font-weight:700">'+t.latency+' ms</span></div>';
+});
+
+// Add pulsing ring keyframe
+var style=document.createElement('style');
+style.textContent='@keyframes loc-ring{0%{width:12px;height:12px;opacity:0.8}100%{width:48px;height:48px;opacity:0;margin-left:-18px;margin-top:-18px;}}';
+document.head.appendChild(style);
+</script>
+</body>
+</html>
