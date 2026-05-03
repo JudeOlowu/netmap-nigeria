@@ -470,94 +470,102 @@ function setYAH(msg, color){
 }
 
 // ── GPS location — primary path ───────────────────────────────────────────────
-function onGPSFound(e){
-  var lat = e.latlng.lat, lon = e.latlng.lng;
-
-  // Cancel the GPS timeout — we got a real fix
+function onLocationFix(lat, lon, accuracy, source){
   if(gpsTimeoutId){ clearTimeout(gpsTimeoutId); gpsTimeoutId=null; }
 
-  // Always update marker position (watchPosition fires repeatedly)
-  placeMarker(lat, lon, e.accuracy);
-
-  // Store for YAH update after city loads
+  // Always update marker
+  placeMarker(lat, lon, accuracy);
   userLat = lat; userLon = lon;
 
-  // Only load city once — guard against repeated watchPosition callbacks
+  // Guard: only load city on first fix
   if(locationResolved){
-    // Just update YAH card with latest position if tiles are available
     if(TILES.length) updateYAHCard(lat, lon);
     return;
   }
   locationResolved = true;
 
   var btn = document.getElementById('locate-btn');
-  btn.textContent='⊕ TRACKING'; btn.classList.remove('locating'); btn.classList.add('locked');
-  document.getElementById('yah-title').textContent = 'GPS LOCATION';
-  document.getElementById('m-title').textContent = 'GPS LOCATION';
+  btn.textContent='⊕ TRACKING';
+  btn.classList.remove('locating'); btn.classList.add('locked');
 
-  // Fly to user
+  var label = accuracy < 500 ? 'GPS LOCATION' : accuracy < 2000 ? 'NETWORK LOCATION' : 'APPROX LOCATION';
+  document.getElementById('yah-title').textContent = label;
+  document.getElementById('m-title').textContent = label;
+
   map.flyTo([lat,lon], 13, {duration:1});
 
-  // Load nearest city — after it resolves, updateYAHCard is called inside loadCity
   var key = nearestCity(lat, lon);
   if(key){
-    setYAH('GPS locked · loading '+CITY_META[key].name+'...','var(--cyan)');
+    setYAH('Located · loading '+CITY_META[key].name+'...','var(--cyan)');
     loadCity(key);
   }
 }
 
-function onGPSError(){
-  // GPS failed — on mobile just prompt city selection, NO IP fallback
-  // Nigerian ISPs always route through Lagos regardless of physical location
-  var btn = document.getElementById('locate-btn');
-  btn.textContent='⊕ LOCATE ME'; btn.classList.remove('locating','locked');
-  setYAH('GPS unavailable. Select your city from the dropdown above.','var(--amber)');
-  // Flash city picker
-  var picker = document.getElementById('city-picker');
-  picker.style.transition='box-shadow 0.3s';
-  picker.style.boxShadow='0 0 0 2px var(--amber)';
-  setTimeout(function(){ picker.style.boxShadow=''; }, 3000);
+function onGPSFound(e){
+  onLocationFix(e.latlng.lat, e.latlng.lng, e.accuracy, 'gps');
+}
+
+function onGPSError(e){
+  // High-accuracy GPS failed — try network location (cell towers + WiFi)
+  // Network location locks in 1-3s, accurate to ~300m — enough for city detection
+  if(watchId !== null){
+    navigator.geolocation.clearWatch(watchId); watchId=null;
+  }
+  navigator.geolocation.getCurrentPosition(
+    function(pos){
+      onLocationFix(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy, 'network');
+    },
+    function(){
+      // Both GPS and network failed — prompt manual selection
+      var btn = document.getElementById('locate-btn');
+      btn.textContent='⊕ LOCATE ME'; btn.classList.remove('locating','locked');
+      setYAH('Could not get location.<br>Select your city from the dropdown above.','var(--amber)');
+      var picker = document.getElementById('city-picker');
+      picker.style.boxShadow='0 0 0 2px var(--amber)';
+      setTimeout(function(){ picker.style.boxShadow=''; }, 3000);
+    },
+    // Network location: low accuracy mode, short timeout
+    {enableHighAccuracy:false, timeout:8000, maximumAge:30000}
+  );
 }
 
 function startLocation(){
   var btn = document.getElementById('locate-btn');
 
-  // Toggle off if already tracking
+  // Toggle off
   if(watchId !== null){
     navigator.geolocation && navigator.geolocation.clearWatch(watchId); watchId=null;
     if(gpsTimeoutId){ clearTimeout(gpsTimeoutId); gpsTimeoutId=null; }
     if(liveMarker){ map.removeLayer(liveMarker); liveMarker=null; }
     if(accuracyCircle){ map.removeLayer(accuracyCircle); accuracyCircle=null; }
-    locationResolved = false; userLat=null; userLon=null;
+    locationResolved=false; userLat=null; userLon=null;
     btn.textContent='⊕ LOCATE ME'; btn.classList.remove('locating','locked');
     setYAH('Press ⊕ LOCATE ME or select a city above','');
     return;
   }
 
   if(!navigator.geolocation){
-    setYAH('GPS not supported. Select your city above.','var(--red)');
+    setYAH('Location not supported. Select your city above.','var(--red)');
     return;
   }
 
   btn.textContent='⊕ ACQUIRING...'; btn.classList.add('locating');
-  setYAH('Waiting for GPS...','var(--muted)');
+  setYAH('Locating...','var(--muted)');
 
-  // GPS only — no IP fallback on Nigerian connections
-  // Give 30s on mobile (permission prompt + acquisition time), 10s on desktop
-  var isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
-  var timeout = isMobile ? 30000 : 10000;
-
+  // Strategy: try high-accuracy GPS with 10s timeout
+  // If it fails (timeout/unavailable), onGPSError falls back to network location
+  // Network location (cell towers + WiFi) locks in 1-3s — correct for city detection
   watchId = navigator.geolocation.watchPosition(
     onGPSFound,
     onGPSError,
-    {enableHighAccuracy:true, timeout:timeout, maximumAge:5000}
+    {enableHighAccuracy:true, timeout:10000, maximumAge:5000}
   );
 
-  // Hard fallback: if browser never fires error callback (Chrome on file://)
+  // Safety net for browsers that never fire error callback
   gpsTimeoutId = setTimeout(function(){
-    gpsTimeoutId = null;
-    if(!locationResolved) onGPSError();
-  }, timeout + 2000);
+    gpsTimeoutId=null;
+    if(!locationResolved) onGPSError({code:3});
+  }, 12000);
 }
 
 // ── Click/tap inspect ─────────────────────────────────────────────────────────
@@ -583,3 +591,4 @@ map.on('click', function(e){
 </script>
 </body>
 </html>
+
