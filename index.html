@@ -355,38 +355,64 @@ var LEGENDS = {
   latency:{label:'LATENCY — lower is better (ms)',min:'20',mid:'50',max:'80+',bar:'linear-gradient(to right,#39ff6e,#90e0ef,#ffb300,#ff6b35,#ff4757)'}
 };
 
+// Speed tier classification
+function getTier(val, mode){
+  if(mode==='latency'){
+    if(val<=20) return {color:'#39ff6e',label:'Excellent',opacity:0.75};
+    if(val<=40) return {color:'#48cae4',label:'Good',opacity:0.72};
+    if(val<=70) return {color:'#ffb300',label:'Fair',opacity:0.70};
+    return {color:'#ff4757',label:'Poor',opacity:0.68};
+  } else {
+    if(val>30)  return {color:'#39ff6e',label:'Fast',opacity:0.75};
+    if(val>15)  return {color:'#48cae4',label:'Good',opacity:0.72};
+    if(val>5)   return {color:'#ffb300',label:'Fair',opacity:0.70};
+    return {color:'#ff4757',label:'Poor',opacity:0.68};
+  }
+}
+
 function renderLayer(mode){
   if(tileLayer){ map.removeLayer(tileLayer); }
   if(!TILES.length) return;
-  var mn=Infinity, mx=-Infinity;
-  for(var i=0;i<TILES.length;i++){
-    var v = mode==='latency' ? TILES[i].latency : TILES[i][mode];
-    if(v<mn) mn=v; if(v>mx) mx=v;
-  }
-  var range = mx-mn||1;
-  // Radius scaled to tile density — sparser cities need larger circles
-  var n = TILES.length;
-  var mRadius = n<100 ? 3500 : n<200 ? 2500 : n<500 ? 1800 : n<2000 ? 1000 : 600;
+
+  // Ookla tiles are geographic grid squares ~0.003-0.005 deg wide
+  // We estimate half-size from median spacing between neighbouring tiles
+  // Default 0.0025 deg (~275m) works for zoom-16 tiles
+  var HALF = 0.0027;
 
   var group = L.layerGroup();
   TILES.forEach(function(t){
-    var v = mode==='latency' ? t.latency : t[mode];
-    var norm = (v-mn)/range;
-    if(mode==='latency') norm = 1-norm;
-    L.circle([t.lat,t.lon],{
-      radius:mRadius, color:'transparent',
-      fillColor:rampColor(norm,mode), fillOpacity:0.72, weight:0
-    }).addTo(group);
+    var val  = mode==='latency' ? t.latency : t[mode];
+    var tier = getTier(val, mode);
+    var bounds = [
+      [t.lat - HALF, t.lon - HALF],
+      [t.lat + HALF, t.lon + HALF]
+    ];
+    L.rectangle(bounds, {
+      color: tier.color,
+      weight: 0.4,
+      opacity: 0.3,
+      fillColor: tier.color,
+      fillOpacity: tier.opacity
+    }).bindTooltip(
+      '<b style="color:'+tier.color+'">'+tier.label+'</b><br>'+
+      (mode==='latency' ? '◎ '+val+' ms' : mode==='dl' ? '↓ '+val+' Mbps' : '↑ '+val+' Mbps'),
+      {sticky:true, offset:[8,0]}
+    ).addTo(group);
   });
   group.addTo(map);
   tileLayer = group;
 
-  var leg = LEGENDS[mode];
-  document.getElementById('legend-label').textContent = leg.label;
-  document.getElementById('legend-bar').style.background = leg.bar;
-  document.getElementById('leg-min').textContent = leg.min;
-  document.getElementById('leg-mid').textContent = leg.mid;
-  document.getElementById('leg-max').textContent = leg.max;
+  // Update legend to show tiers instead of gradient
+  var isLatency = mode==='latency';
+  document.getElementById('legend-label').textContent =
+    isLatency ? 'LATENCY ZONES' : (mode==='dl' ? 'DOWNLOAD ZONES' : 'UPLOAD ZONES');
+  document.getElementById('legend-bar').style.background =
+    isLatency
+      ? 'linear-gradient(to right,#39ff6e,#48cae4,#ffb300,#ff4757)'
+      : 'linear-gradient(to right,#ff4757,#ffb300,#48cae4,#39ff6e)';
+  document.getElementById('leg-min').textContent = isLatency ? 'Fast' : 'Poor';
+  document.getElementById('leg-mid').textContent = 'Fair';
+  document.getElementById('leg-max').textContent = isLatency ? 'Slow' : 'Fast';
 }
 
 function setLayer(mode, btn){
@@ -442,14 +468,23 @@ function updateYAHCard(lat, lon){
 // ── Live location marker ──────────────────────────────────────────────────────
 var liveIcon = L.divIcon({
   className:'',
-  html:'<div style="position:relative;width:20px;height:20px;">'+
+  html:'<div style="position:relative;width:32px;height:32px;">'+
+       // Outer ring — slow pulse
        '<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);'+
-       'width:12px;height:12px;border-radius:50%;background:#00e5ff;border:2px solid #fff;'+
-       'box-shadow:0 0 0 2px #00e5ff;z-index:2;"></div>'+
-       '<div style="position:absolute;top:50%;left:50%;'+
-       'width:12px;height:12px;border-radius:50%;background:rgba(0,229,255,0.35);'+
-       'animation:loc-ring 1.8s ease-out infinite;"></div></div>',
-  iconSize:[20,20], iconAnchor:[10,10]
+       'width:32px;height:32px;border-radius:50%;'+
+       'background:rgba(0,229,255,0.15);border:1.5px solid rgba(0,229,255,0.4);'+
+       'animation:loc-ring 2s ease-out infinite;"></div>'+
+       // Middle ring
+       '<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);'+
+       'width:20px;height:20px;border-radius:50%;'+
+       'background:rgba(0,229,255,0.25);animation:loc-ring 2s ease-out 0.4s infinite;"></div>'+
+       // Core dot
+       '<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);'+
+       'width:12px;height:12px;border-radius:50%;background:#00e5ff;'+
+       'border:2.5px solid #fff;box-shadow:0 0 0 2px #00e5ff,0 2px 8px rgba(0,229,255,0.6);'+
+       'z-index:10;"></div>'+
+       '</div>',
+  iconSize:[32,32], iconAnchor:[16,16]
 });
 
 function placeMarker(lat, lon, accuracy){
@@ -591,4 +626,5 @@ map.on('click', function(e){
 </script>
 </body>
 </html>
+
 
