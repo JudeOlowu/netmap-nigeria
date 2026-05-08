@@ -424,9 +424,17 @@ function renderLayer(mode){
 }
 
 function setDataMode(mode, btn){
+  if(dataMode === mode) return; // already in this mode
   dataMode = mode;
   document.querySelectorAll('#btn-fixed,#btn-mobile').forEach(function(b){b.classList.remove('active');});
   if(btn) btn.classList.add('active');
+  // Clear current data immediately so old tiles don't persist
+  TILES = [];
+  if(tileLayer){ map.removeLayer(tileLayer); tileLayer=null; }
+  document.getElementById('s-dl').textContent='—';
+  document.getElementById('s-ul').textContent='—';
+  document.getElementById('s-lat').textContent='—';
+  document.getElementById('s-tiles').textContent='—';
   // Reload current city with new data mode
   var currentCity = document.getElementById('city-picker').value;
   if(currentCity) loadCity(currentCity);
