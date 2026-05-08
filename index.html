@@ -184,6 +184,10 @@ select#city-picker{background:var(--surface);border:1px solid var(--cyan);color:
       </select>
     </div>
     <button class="locate-btn" id="locate-btn" onclick="startLocation()">⊕ LOCATE ME</button>
+    <div class="toggles" style="border:1px solid var(--border);border-radius:3px;overflow:hidden;margin-right:4px;">
+      <button class="toggle-btn active" id="btn-fixed" onclick="setDataMode('fixed',this)" style="border:none;border-radius:0;">📶 WiFi</button>
+      <button class="toggle-btn" id="btn-mobile" onclick="setDataMode('mobile',this)" style="border:none;border-left:1px solid var(--border);border-radius:0;">📱 Mobile</button>
+    </div>
     <div class="toggles">
       <button class="toggle-btn active" id="btn-dl" onclick="setLayer('dl',this)">↓ DL</button>
       <button class="toggle-btn" id="btn-ul" onclick="setLayer('ul',this)">↑ UL</button>
@@ -258,6 +262,7 @@ L.control.zoom({position:'bottomright'}).addTo(map);
 var TILES = [];
 var tileLayer = null;
 var currentMode = 'dl';
+var dataMode = 'fixed';  // 'fixed' or 'mobile'
 var liveMarker = null, accuracyCircle = null;
 var watchId = null, gpsTimeoutId = null;
 var locationResolved = false;   // guard: prevents double city load on repeat GPS fires
@@ -292,7 +297,7 @@ function loadCity(cityKey, onLoaded){
   document.getElementById('s-lat').textContent='—';
   document.getElementById('s-tiles').textContent='—';
 
-  fetch('data/'+cityKey+'.json')
+  fetch('data/'+dataMode+'/'+cityKey+'.json')
     .then(function(r){
       if(!r.ok) throw new Error('not found');
       return r.json();
@@ -318,8 +323,10 @@ function loadCity(cityKey, onLoaded){
 
 function showNoData(cityKey){
   var meta = CITY_META[cityKey]||{};
+  var modeWord = dataMode==='mobile' ? 'mobile' : 'fixed broadband';
   document.getElementById('no-data-msg').textContent =
-    'No Ookla data for '+(meta.name||cityKey)+' in Q3 2025. Try Lagos or Ibadan.';
+    'No Ookla '+modeWord+' data for '+(meta.name||cityKey)+' in Q3 2025. Try Lagos or Ibadan, or switch to '+
+    (dataMode==='mobile'?'WiFi':'Mobile')+' data above.';
   document.getElementById('no-data-banner').style.display='block';
   if(meta.lat) map.flyTo([meta.lat,meta.lon],11,{duration:1});
 }
@@ -404,8 +411,9 @@ function renderLayer(mode){
 
   // Update legend to show tiers instead of gradient
   var isLatency = mode==='latency';
+  var modeLabel = dataMode==='mobile' ? ' (MOBILE)' : ' (WIFI)';
   document.getElementById('legend-label').textContent =
-    isLatency ? 'LATENCY ZONES' : (mode==='dl' ? 'DOWNLOAD ZONES' : 'UPLOAD ZONES');
+    isLatency ? 'LATENCY ZONES'+modeLabel : (mode==='dl' ? 'DOWNLOAD ZONES'+modeLabel : 'UPLOAD ZONES'+modeLabel);
   document.getElementById('legend-bar').style.background =
     isLatency
       ? 'linear-gradient(to right,#39ff6e,#48cae4,#ffb300,#ff4757)'
@@ -413,6 +421,15 @@ function renderLayer(mode){
   document.getElementById('leg-min').textContent = isLatency ? 'Fast' : 'Poor';
   document.getElementById('leg-mid').textContent = 'Fair';
   document.getElementById('leg-max').textContent = isLatency ? 'Slow' : 'Fast';
+}
+
+function setDataMode(mode, btn){
+  dataMode = mode;
+  document.querySelectorAll('#btn-fixed,#btn-mobile').forEach(function(b){b.classList.remove('active');});
+  if(btn) btn.classList.add('active');
+  // Reload current city with new data mode
+  var currentCity = document.getElementById('city-picker').value;
+  if(currentCity) loadCity(currentCity);
 }
 
 function setLayer(mode, btn){
@@ -628,5 +645,6 @@ map.on('click', function(e){
 </script>
 </body>
 </html>
+
 
 
