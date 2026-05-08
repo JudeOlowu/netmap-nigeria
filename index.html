@@ -377,7 +377,7 @@ function renderLayer(mode){
   // Ookla tiles are geographic grid squares ~0.003-0.005 deg wide
   // We estimate half-size from median spacing between neighbouring tiles
   // Default 0.0025 deg (~275m) works for zoom-16 tiles
-  var HALF = 0.0027;
+  var HALF = 0.0018;  // ~200m — tight squares matching Ookla tile density
 
   var group = L.layerGroup();
   TILES.forEach(function(t){
@@ -468,23 +468,25 @@ function updateYAHCard(lat, lon){
 // ── Live location marker ──────────────────────────────────────────────────────
 var liveIcon = L.divIcon({
   className:'',
-  html:'<div style="position:relative;width:32px;height:32px;">'+
-       // Outer ring — slow pulse
+  html:'<div style="position:relative;width:48px;height:48px;">'+
+       // Outer pulse ring
        '<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);'+
-       'width:32px;height:32px;border-radius:50%;'+
-       'background:rgba(0,229,255,0.15);border:1.5px solid rgba(0,229,255,0.4);'+
-       'animation:loc-ring 2s ease-out infinite;"></div>'+
-       // Middle ring
+       'width:48px;height:48px;border-radius:50%;'+
+       'background:rgba(255,255,255,0.08);border:2px solid rgba(255,255,255,0.5);'+
+       'animation:loc-ring 1.8s ease-out infinite;"></div>'+
+       // Inner pulse ring
        '<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);'+
-       'width:20px;height:20px;border-radius:50%;'+
-       'background:rgba(0,229,255,0.25);animation:loc-ring 2s ease-out 0.4s infinite;"></div>'+
-       // Core dot
+       'width:30px;height:30px;border-radius:50%;'+
+       'background:rgba(255,255,255,0.12);border:1.5px solid rgba(255,255,255,0.6);'+
+       'animation:loc-ring 1.8s ease-out 0.5s infinite;"></div>'+
+       // White core — high contrast against any zone color
        '<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);'+
-       'width:12px;height:12px;border-radius:50%;background:#00e5ff;'+
-       'border:2.5px solid #fff;box-shadow:0 0 0 2px #00e5ff,0 2px 8px rgba(0,229,255,0.6);'+
+       'width:16px;height:16px;border-radius:50%;background:#ffffff;'+
+       'border:3px solid #00e5ff;'+
+       'box-shadow:0 0 0 3px rgba(0,229,255,0.4),0 0 16px rgba(255,255,255,0.8),0 2px 6px rgba(0,0,0,0.5);'+
        'z-index:10;"></div>'+
        '</div>',
-  iconSize:[32,32], iconAnchor:[16,16]
+  iconSize:[48,48], iconAnchor:[24,24]
 });
 
 function placeMarker(lat, lon, accuracy){
