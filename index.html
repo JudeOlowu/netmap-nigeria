@@ -197,10 +197,10 @@ select#city-picker{background:var(--surface);border:1px solid var(--cyan);color:
 </header>
 
 <div class="stats-bar">
-  <div class="stat"><div class="stat-label">Median DL</div><div class="stat-val" style="color:var(--cyan)" id="s-dl">—</div></div>
-  <div class="stat"><div class="stat-label">Median UL</div><div class="stat-val" style="color:var(--green)" id="s-ul">—</div></div>
-  <div class="stat"><div class="stat-label">Latency</div><div class="stat-val" style="color:var(--amber)" id="s-lat">—</div></div>
-  <div class="stat"><div class="stat-label">Tiles</div><div class="stat-val" id="s-tiles">—</div></div>
+  <div class="stat"><div class="stat-label">↓ DL</div><div class="stat-val" style="color:var(--cyan)" id="s-dl">—</div></div>
+  <div class="stat"><div class="stat-label">↑ UL</div><div class="stat-val" style="color:var(--green)" id="s-ul">—</div></div>
+  <div class="stat"><div class="stat-label">◎ MS</div><div class="stat-val" style="color:var(--amber)" id="s-lat">—</div></div>
+  <div class="stat"><div class="stat-label">TILES</div><div class="stat-val" id="s-tiles">—</div></div>
 </div>
 
 <div class="main">
@@ -653,6 +653,7 @@ map.on('click', function(e){
 </script>
 </body>
 </html>
+
 
 
 
