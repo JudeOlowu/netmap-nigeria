@@ -285,27 +285,21 @@ function onLocationFix(lat,lon,accuracy){
   if(gpsTimeoutId){clearTimeout(gpsTimeoutId);gpsTimeoutId=null;}
   placeMarker(lat,lon,accuracy);
   userLat=lat;userLon=lon;
+  // Already resolved — just update marker and YAH card as GPS refines
   if(locationResolved){if(TILES.length)updateYAHCard(lat,lon);return;}
   locationResolved=true;
   var btn=document.getElementById('locate-btn');
   btn.textContent='⊕ TRACKING';btn.classList.remove('locating');btn.classList.add('locked');
-  var label,autoLoad;
-  if(accuracy<500){label='GPS LOCATION';autoLoad=true;}
-  else if(accuracy<2000){label='NETWORK LOCATION';autoLoad=true;}
-  else{label='APPROX LOCATION';autoLoad=false;}
+  var label=accuracy<500?'GPS LOCATION':accuracy<2000?'NETWORK LOCATION':'APPROX LOCATION';
   document.getElementById('yah-title').textContent=label;
   document.getElementById('m-title').textContent=label;
-  if(autoLoad){
-    map.flyTo([lat,lon],13,{duration:1});
-    var key=nearestCity(lat,lon);
-    if(key){setYAH('Located · loading '+CITY_META[key].name+'...','var(--cyan)');loadCity(key);}
-  }else{
-    // IP geolocation — accuracy too low, do NOT load city automatically
-    map.flyTo([lat,lon],11,{duration:1});
-    setYAH('Location approximate (ISP routing).<br><b style="color:var(--cyan)">Select your actual city above.</b>','var(--amber)');
-    var picker=document.getElementById('city-picker');
-    picker.style.boxShadow='0 0 0 2px var(--amber)';picker.style.transition='box-shadow 0.3s';
-    setTimeout(function(){picker.style.boxShadow='';},4000);
+  // Always auto-load nearest city — GPS watchPosition will refine position over time
+  // nearestCity() uses distance, so even a coarse fix picks the right city in Nigeria
+  map.flyTo([lat,lon],13,{duration:1});
+  var key=nearestCity(lat,lon);
+  if(key){
+    setYAH('Located · loading '+CITY_META[key].name+'...','var(--cyan)');
+    loadCity(key);
   }
 }
 function onGPSFound(e){onLocationFix(e.latlng.lat,e.latlng.lng,e.accuracy);}
@@ -354,6 +348,7 @@ map.on('click',function(e){
 </script>
 </body>
 </html>
+
 
 
 
