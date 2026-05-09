@@ -337,8 +337,10 @@ function startLocation(){
   if(!navigator.geolocation){setYAH('Location not supported. Select your city above.','var(--red)');return;}
   btn.textContent='⊕ ACQUIRING...';btn.classList.add('locating');
   setYAH('Locating...','var(--muted)');
-  watchId=navigator.geolocation.watchPosition(onGPSFound,onGPSError,{enableHighAccuracy:true,timeout:10000,maximumAge:5000});
-  gpsTimeoutId=setTimeout(function(){gpsTimeoutId=null;if(!locationResolved)onGPSError();},12000);
+  var isMobile=/Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
+  var gpsTimeout=isMobile?30000:10000;
+  watchId=navigator.geolocation.watchPosition(onGPSFound,onGPSError,{enableHighAccuracy:true,timeout:gpsTimeout,maximumAge:5000});
+  gpsTimeoutId=setTimeout(function(){gpsTimeoutId=null;if(!locationResolved)onGPSError();},gpsTimeout+2000);
 }
 map.on('click',function(e){
   if(!TILES.length)return;
@@ -352,6 +354,7 @@ map.on('click',function(e){
 </script>
 </body>
 </html>
+
 
 
 
