@@ -22,7 +22,7 @@ header{display:flex;align-items:center;justify-content:space-between;padding:8px
 .header-right{display:flex;flex-direction:column;gap:4px;align-items:flex-end;}
 .header-row{display:flex;align-items:center;gap:5px;flex-wrap:wrap;}
 .city-wrap{position:relative;}
-select#city-picker{background:var(--surface);border:1px solid var(--cyan);color:var(--cyan);font-family:'Space Mono',monospace;font-size:11px;padding:5px 22px 5px 8px;border-radius:3px;cursor:pointer;appearance:none;-webkit-appearance:none;outline:none;}
+select#city-picker, select#isp-picker{background:var(--surface);border:1px solid var(--cyan);color:var(--cyan);font-family:'Space Mono',monospace;font-size:11px;padding:5px 22px 5px 8px;border-radius:3px;cursor:pointer;appearance:none;-webkit-appearance:none;outline:none;}
 .city-wrap::after{content:'▾';position:absolute;right:7px;top:50%;transform:translateY(-50%);color:var(--cyan);pointer-events:none;font-size:10px;}
 .locate-btn{padding:5px 10px;border-radius:3px;font-family:'Space Mono',monospace;font-size:10px;cursor:pointer;border:1px solid var(--green);color:var(--green);background:transparent;transition:all 0.15s;white-space:nowrap;}
 .locate-btn:hover{background:rgba(57,255,110,0.1);}
@@ -110,6 +110,16 @@ select#city-picker{background:var(--surface);border:1px solid var(--cyan);color:
           <option value="asaba">Asaba</option>
         </select>
       </div>
+      <div class="city-wrap">
+        <select id="isp-picker" onchange="filterISP(this.value)">
+          <option value="">All ISPs</option>
+          <option value="MTN">MTN</option>
+          <option value="Airtel">Airtel</option>
+          <option value="Glo">Glo</option>
+          <option value="9mobile">9mobile</option>
+          <option value="Starlink">Starlink</option>
+        </select>
+      </div>
       <button class="locate-btn" id="locate-btn" onclick="startLocation()">⊕ LOCATE ME</button>
     </div>
     <div class="header-row">
@@ -167,7 +177,7 @@ select#city-picker{background:var(--surface);border:1px solid var(--cyan);color:
 var map=L.map('map',{center:[9.0,8.0],zoom:6,zoomControl:false});
 L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{maxZoom:19,attribution:'© CartoDB | © OSM'}).addTo(map);
 L.control.zoom({position:'bottomright'}).addTo(map);
-var TILES=[],tileLayer=null,currentMode='dl',dataMode='fixed';
+var TILES=[],FILTERED_TILES=[],currentISP='',tileLayer=null,currentMode='dl',dataMode='fixed';
 var liveMarker=null,accuracyCircle=null,watchId=null,gpsTimeoutId=null;
 var locationResolved=false,userLat=null,userLon=null;
 var CITY_META={
@@ -190,7 +200,7 @@ function loadCity(cityKey,skipFly){
     .then(function(tiles){
       document.getElementById('loading').style.display='none';
       if(!tiles||tiles.length===0){showNoData(cityKey);return;}
-      TILES=tiles;renderStats();renderLayer(currentMode);
+      TILES=tiles;applyISPFilter();
       document.getElementById('city-picker').value=cityKey;
       if(!skipFly){var m=CITY_META[cityKey];if(m)map.flyTo([m.lat,m.lon],12,{duration:1.2});}
       if(userLat!==null)updateYAHCard(userLat,userLon);
@@ -209,17 +219,34 @@ function setDataMode(mode,btn){
   dataMode=mode;
   document.querySelectorAll('.data-toggle').forEach(function(b){b.classList.remove('active');});
   if(btn)btn.classList.add('active');
-  TILES=[];if(tileLayer){map.removeLayer(tileLayer);tileLayer=null;}
+  TILES=[];FILTERED_TILES=[];if(tileLayer){map.removeLayer(tileLayer);tileLayer=null;}
   ['s-dl','s-ul','s-lat','s-tiles'].forEach(function(id){document.getElementById(id).textContent='—';});
   var c=document.getElementById('city-picker').value;
   if(c)loadCity(c,true);
 }
-function median(arr){var s=arr.slice().sort(function(a,b){return a-b;});var m=Math.floor(s.length/2);return s.length%2===0?(s[m-1]+s[m])/2:s[m];}
+function applyISPFilter() {
+  if (currentISP) {
+    FILTERED_TILES = TILES.filter(function(t) { return t.isp === currentISP; });
+  } else {
+    FILTERED_TILES = TILES;
+  }
+  renderStats();
+  renderLayer(currentMode);
+}
+function filterISP(isp) {
+  currentISP = isp;
+  applyISPFilter();
+}
+function median(arr){if(!arr.length)return 0;var s=arr.slice().sort(function(a,b){return a-b;});var m=Math.floor(s.length/2);return s.length%2===0?(s[m-1]+s[m])/2:s[m];}
 function renderStats(){
-  document.getElementById('s-dl').textContent=median(TILES.map(function(t){return t.dl;})).toFixed(1)+' Mbps';
-  document.getElementById('s-ul').textContent=median(TILES.map(function(t){return t.ul;})).toFixed(1)+' Mbps';
-  document.getElementById('s-lat').textContent=median(TILES.map(function(t){return t.latency;})).toFixed(0)+' ms';
-  document.getElementById('s-tiles').textContent=TILES.length.toLocaleString();
+  if(!FILTERED_TILES.length){
+    ['s-dl','s-ul','s-lat','s-tiles'].forEach(function(id){document.getElementById(id).textContent='—';});
+    return;
+  }
+  document.getElementById('s-dl').textContent=median(FILTERED_TILES.map(function(t){return t.dl;})).toFixed(1)+' Mbps';
+  document.getElementById('s-ul').textContent=median(FILTERED_TILES.map(function(t){return t.ul;})).toFixed(1)+' Mbps';
+  document.getElementById('s-lat').textContent=median(FILTERED_TILES.map(function(t){return t.latency;})).toFixed(0)+' ms';
+  document.getElementById('s-tiles').textContent=FILTERED_TILES.length.toLocaleString();
 }
 function getTier(val,mode){
   if(mode==='latency'){
@@ -241,12 +268,12 @@ var LEGENDS={
 };
 function renderLayer(mode){
   if(tileLayer){map.removeLayer(tileLayer);}
-  if(!TILES.length)return;
-  var H=0.0018,group=L.layerGroup();
-  TILES.forEach(function(t){
+  if(!FILTERED_TILES.length)return;
+  var H=0.002745,group=L.layerGroup();
+  FILTERED_TILES.forEach(function(t){
     var val=mode==='latency'?t.latency:t[mode],tier=getTier(val,mode);
-    L.rectangle([[t.lat-H,t.lon-H],[t.lat+H,t.lon+H]],{color:tier.color,weight:0.4,opacity:0.3,fillColor:tier.color,fillOpacity:tier.opacity})
-     .bindTooltip('<b style="color:'+tier.color+'">'+tier.label+'</b><br>'+(mode==='latency'?'◎ '+val+' ms':mode==='dl'?'↓ '+val+' Mbps':'↑ '+val+' Mbps'),{sticky:true,offset:[8,0]})
+    L.rectangle([[t.lat-H,t.lon-H],[t.lat+H,t.lon+H]],{color:tier.color,weight:0,opacity:1,fillColor:tier.color,fillOpacity:tier.opacity})
+     .bindTooltip('<b style="color:'+tier.color+'">'+tier.label+'</b><br>'+(mode==='latency'?'◎ '+val+' ms':mode==='dl'?'↓ '+val+' Mbps':'↑ '+val+' Mbps')+'<br>🏢 '+(t.isp||'Mixed'),{sticky:true,offset:[8,0]})
      .addTo(group);
   });
   group.addTo(map);tileLayer=group;
@@ -263,12 +290,12 @@ function setLayer(mode,btn){
   if(btn)btn.classList.add('active');
   renderLayer(mode);
 }
-function nearestTile(lat,lon){var best=null,bd=Infinity;for(var i=0;i<TILES.length;i++){var d=(TILES[i].lat-lat)*(TILES[i].lat-lat)+(TILES[i].lon-lon)*(TILES[i].lon-lon);if(d<bd){bd=d;best=TILES[i];}}return best;}
+function nearestTile(lat,lon){var best=null,bd=Infinity;for(var i=0;i<FILTERED_TILES.length;i++){var d=(FILTERED_TILES[i].lat-lat)*(FILTERED_TILES[i].lat-lat)+(FILTERED_TILES[i].lon-lon)*(FILTERED_TILES[i].lon-lon);if(d<bd){bd=d;best=FILTERED_TILES[i];}}return best;}
 function nearestCity(lat,lon){var best=null,bd=Infinity;Object.keys(CITY_META).forEach(function(k){var m=CITY_META[k],d=(m.lat-lat)*(m.lat-lat)+(m.lon-lon)*(m.lon-lon);if(d<bd){bd=d;best=k;}});return best;}
 function speedColor(dl){return dl>30?'var(--green)':dl>15?'var(--amber)':'var(--red)';}
 function updateYAHCard(lat,lon){
   var t=nearestTile(lat,lon);if(!t)return;var c=speedColor(t.dl);
-  document.getElementById('yah-content').innerHTML='<div class="yah-metric"><span class="yah-metric-label">↓ Download</span><span class="yah-metric-val" style="color:'+c+'">'+t.dl+' Mbps</span></div><div class="yah-metric"><span class="yah-metric-label">↑ Upload</span><span class="yah-metric-val" style="color:#f72585">'+t.ul+' Mbps</span></div><div class="yah-metric"><span class="yah-metric-label">◎ Latency</span><span class="yah-metric-val" style="color:var(--amber)">'+t.latency+' ms</span></div><div class="yah-coords">'+lat.toFixed(5)+'°N '+lon.toFixed(5)+'°E</div>';
+  document.getElementById('yah-content').innerHTML='<div class="yah-metric"><span class="yah-metric-label">↓ Download</span><span class="yah-metric-val" style="color:'+c+'">'+t.dl+' Mbps</span></div><div class="yah-metric"><span class="yah-metric-label">↑ Upload</span><span class="yah-metric-val" style="color:#f72585">'+t.ul+' Mbps</span></div><div class="yah-metric"><span class="yah-metric-label">◎ Latency</span><span class="yah-metric-val" style="color:var(--amber)">'+t.latency+' ms</span></div><div class="yah-metric"><span class="yah-metric-label">🏢 ISP</span><span class="yah-metric-val" style="color:var(--cyan)">'+(t.isp||'Mixed')+'</span></div><div class="yah-coords">'+lat.toFixed(5)+'°N '+lon.toFixed(5)+'°E</div>';
   document.getElementById('m-metrics').innerHTML='<span class="m-metric">↓ <span style="color:'+c+'">'+t.dl+' Mbps</span></span><span class="m-metric">↑ <span style="color:#f72585">'+t.ul+' Mbps</span></span><span class="m-metric">◎ <span style="color:var(--amber)">'+t.latency+' ms</span></span>';
 }
 function setYAH(msg,color){
@@ -337,11 +364,11 @@ function startLocation(){
   gpsTimeoutId=setTimeout(function(){gpsTimeoutId=null;if(!locationResolved)onGPSError();},gpsTimeout+2000);
 }
 map.on('click',function(e){
-  if(!TILES.length)return;
+  if(!FILTERED_TILES.length)return;
   var t=nearestTile(e.latlng.lat,e.latlng.lng);if(!t)return;
   var c=speedColor(t.dl);
   document.getElementById('click-panel').style.display='block';
-  document.getElementById('click-info').innerHTML='<div style="font-family:\'Space Mono\',monospace;font-size:9px;color:var(--muted);margin-bottom:6px;">'+t.lat.toFixed(4)+'°N '+t.lon.toFixed(4)+'°E</div><div class="inspect-row"><span style="color:var(--muted)">↓ Download</span><span style="color:'+c+';font-weight:700">'+t.dl+' Mbps</span></div><div class="inspect-row"><span style="color:var(--muted)">↑ Upload</span><span style="color:#f72585;font-weight:700">'+t.ul+' Mbps</span></div><div class="inspect-row"><span style="color:var(--muted)">◎ Latency</span><span style="color:var(--amber);font-weight:700">'+t.latency+' ms</span></div>';
+  document.getElementById('click-info').innerHTML='<div style="font-family:\'Space Mono\',monospace;font-size:9px;color:var(--muted);margin-bottom:6px;">'+t.lat.toFixed(4)+'°N '+t.lon.toFixed(4)+'°E &bull; '+(t.isp||'Mixed')+'</div><div class="inspect-row"><span style="color:var(--muted)">↓ Download</span><span style="color:'+c+';font-weight:700">'+t.dl+' Mbps</span></div><div class="inspect-row"><span style="color:var(--muted)">↑ Upload</span><span style="color:#f72585;font-weight:700">'+t.ul+' Mbps</span></div><div class="inspect-row"><span style="color:var(--muted)">◎ Latency</span><span style="color:var(--amber);font-weight:700">'+t.latency+' ms</span></div>';
   document.getElementById('m-title').textContent=t.lat.toFixed(3)+'°N '+t.lon.toFixed(3)+'°E';
   document.getElementById('m-metrics').innerHTML='<span class="m-metric">↓ <span style="color:'+c+'">'+t.dl+' Mbps</span></span><span class="m-metric">↑ <span style="color:#f72585">'+t.ul+' Mbps</span></span><span class="m-metric">◎ <span style="color:var(--amber)">'+t.latency+' ms</span></span>';
 });
