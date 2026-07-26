@@ -3,381 +3,1169 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>NetMap Nigeria — Internet Connectivity</title>
+<title>NetMap Nigeria — Next-Gen Internet Connectivity Telemetry</title>
+<meta name="description" content="Interactive internet speed and latency coverage visualizer across Nigerian cities using Ookla Open Data Q3 2025.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <style>
-:root{--bg:#080c12;--surface:#0d1420;--border:#1a2540;--cyan:#00e5ff;--green:#39ff6e;--amber:#ffb300;--red:#ff4757;--text:#cdd6f4;--muted:#6b7280;--panel-bg:rgba(8,12,18,0.95);}
-*{margin:0;padding:0;box-sizing:border-box;}
-body{background:var(--bg);font-family:'DM Sans',sans-serif;color:var(--text);height:100vh;display:flex;flex-direction:column;overflow:hidden;}
-header{display:flex;align-items:center;justify-content:space-between;padding:8px 16px;background:var(--surface);border-bottom:1px solid var(--border);z-index:1000;flex-shrink:0;gap:8px;flex-wrap:wrap;}
-.logo{display:flex;align-items:center;gap:8px;}
-.logo-icon{width:26px;height:26px;border:1.5px solid var(--cyan);border-radius:4px;position:relative;flex-shrink:0;}
-.logo-icon::before{content:'';position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:11px;height:11px;border-radius:50%;background:radial-gradient(circle,var(--cyan) 0%,transparent 70%);animation:lp 2s ease-in-out infinite;}
-@keyframes lp{0%,100%{opacity:0.4;transform:translate(-50%,-50%) scale(0.8)}50%{opacity:1;transform:translate(-50%,-50%) scale(1.1)}}
-.logo h1{font-family:'Space Mono',monospace;font-size:12px;letter-spacing:0.08em;color:var(--cyan);}
-.logo span{font-size:10px;color:var(--muted);font-family:'Space Mono',monospace;}
-.header-right{display:flex;flex-direction:column;gap:4px;align-items:flex-end;}
-.header-row{display:flex;align-items:center;gap:5px;flex-wrap:wrap;}
-.city-wrap{position:relative;}
-select#city-picker, select#isp-picker{background:var(--surface);border:1px solid var(--cyan);color:var(--cyan);font-family:'Space Mono',monospace;font-size:11px;padding:5px 22px 5px 8px;border-radius:3px;cursor:pointer;appearance:none;-webkit-appearance:none;outline:none;}
-.city-wrap::after{content:'▾';position:absolute;right:7px;top:50%;transform:translateY(-50%);color:var(--cyan);pointer-events:none;font-size:10px;}
-.locate-btn{padding:5px 10px;border-radius:3px;font-family:'Space Mono',monospace;font-size:10px;cursor:pointer;border:1px solid var(--green);color:var(--green);background:transparent;transition:all 0.15s;white-space:nowrap;}
-.locate-btn:hover{background:rgba(57,255,110,0.1);}
-.locate-btn.locating{border-color:var(--amber);color:var(--amber);animation:bb 0.8s ease-in-out infinite;}
-.locate-btn.locked{border-color:var(--green);color:var(--green);background:rgba(57,255,110,0.08);}
-@keyframes bb{0%,100%{opacity:1}50%{opacity:0.5}}
-.data-toggles{display:flex;border:1px solid var(--border);border-radius:3px;overflow:hidden;}
-.data-toggle{padding:5px 10px;font-family:'Space Mono',monospace;font-size:10px;cursor:pointer;background:transparent;border:none;color:var(--muted);transition:all 0.15s;}
-.data-toggle:first-child{border-right:1px solid var(--border);}
-.data-toggle.active{background:rgba(0,229,255,0.12);color:var(--cyan);font-weight:700;}
-.toggles{display:flex;gap:3px;}
-.toggle-btn{padding:5px 9px;border-radius:3px;font-family:'Space Mono',monospace;font-size:10px;cursor:pointer;background:transparent;border:1px solid var(--border);color:var(--muted);transition:all 0.15s;}
-.toggle-btn.active{background:var(--cyan);border-color:var(--cyan);color:#000;font-weight:700;}
-.toggle-btn:hover:not(.active){border-color:var(--cyan);color:var(--cyan);}
-/* FIX 3: min-width:0 on .stat prevents flex collapse */
-.stats-bar{display:flex;gap:1px;background:var(--border);border-bottom:1px solid var(--border);flex-shrink:0;z-index:999;}
-.stat{flex:1;min-width:0;padding:5px 10px;background:var(--surface);}
-.stat-label{font-family:'Space Mono',monospace;font-size:8px;letter-spacing:0.1em;color:var(--muted);text-transform:uppercase;white-space:nowrap;}
-.stat-val{font-family:'Space Mono',monospace;font-size:13px;font-weight:700;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.main{flex:1;display:flex;overflow:hidden;position:relative;}
-#map{flex:1;cursor:crosshair;position:relative;}
-#loading{display:none;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:900;font-family:'Space Mono',monospace;font-size:12px;color:var(--cyan);background:var(--panel-bg);padding:14px 20px;border-radius:4px;border:1px solid var(--border);backdrop-filter:blur(12px);white-space:nowrap;}
-#no-data-banner{display:none;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:800;background:var(--panel-bg);border:1px solid var(--border);border-radius:6px;padding:20px 28px;text-align:center;font-family:'Space Mono',monospace;max-width:280px;backdrop-filter:blur(12px);}
-#no-data-banner h3{color:var(--amber);font-size:12px;margin-bottom:8px;}
-#no-data-banner p{color:var(--muted);font-size:10px;line-height:1.7;}
-.side-panel{width:240px;background:var(--panel-bg);border-left:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;flex-shrink:0;}
-.panel-section{padding:12px 14px;border-bottom:1px solid var(--border);}
-.panel-title{font-family:'Space Mono',monospace;font-size:9px;letter-spacing:0.15em;color:var(--muted);text-transform:uppercase;margin-bottom:8px;}
-.yah-card{background:rgba(0,229,255,0.04);border:1px solid rgba(0,229,255,0.15);border-radius:4px;padding:10px;}
-.yah-dot{width:7px;height:7px;border-radius:50%;background:var(--cyan);box-shadow:0 0 6px var(--cyan);flex-shrink:0;animation:yp 1.5s ease-in-out infinite;}
-@keyframes yp{0%,100%{box-shadow:0 0 4px var(--cyan)}50%{box-shadow:0 0 12px var(--cyan)}}
-.yah-header{display:flex;align-items:center;gap:8px;margin-bottom:8px;}
-.yah-title{font-family:'Space Mono',monospace;font-size:10px;color:var(--cyan);letter-spacing:0.06em;}
-.yah-metric{display:flex;justify-content:space-between;padding:2px 0;}
-.yah-metric-label{font-family:'Space Mono',monospace;font-size:10px;color:var(--muted);}
-.yah-metric-val{font-family:'Space Mono',monospace;font-size:11px;font-weight:700;}
-.yah-coords{font-family:'Space Mono',monospace;font-size:9px;color:var(--muted);margin-top:6px;padding-top:6px;border-top:1px solid var(--border);line-height:1.6;}
-.yah-waiting{font-family:'Space Mono',monospace;font-size:10px;color:var(--muted);padding:6px 0;line-height:1.6;}
-.legend-bar{height:7px;border-radius:2px;margin:6px 0;}
-.legend-labels{display:flex;justify-content:space-between;}
-.legend-labels span{font-family:'Space Mono',monospace;font-size:9px;color:var(--muted);}
-#click-panel{display:none;}
-.inspect-row{display:flex;justify-content:space-between;padding:2px 0;font-family:'Space Mono',monospace;font-size:11px;}
-.source-badge{font-family:'Space Mono',monospace;font-size:9px;color:var(--muted);padding:10px 14px;margin-top:auto;line-height:1.7;border-top:1px solid var(--border);}
-.source-badge a{color:var(--cyan);text-decoration:none;}
-#mobile-overlay{display:none;position:absolute;bottom:0;left:0;right:0;z-index:700;background:var(--panel-bg);border-top:1px solid var(--border);padding:10px 14px;backdrop-filter:blur(12px);}
-#mobile-yah{font-family:'Space Mono',monospace;font-size:11px;line-height:1.7;}
-#mobile-yah .m-title{color:var(--cyan);font-size:10px;letter-spacing:0.06em;margin-bottom:4px;}
-#mobile-yah .m-row{display:flex;gap:16px;flex-wrap:wrap;}
-#mobile-yah .m-metric{color:var(--muted);font-size:10px;}
-#mobile-yah .m-metric span{font-weight:700;}
-@media(max-width:640px){.side-panel{display:none;}#mobile-overlay{display:block;}.logo span{display:none;}.logo h1{font-size:11px;}.stat{padding:4px 8px;}.stat-val{font-size:11px;}.header-right{flex-direction:row;flex-wrap:wrap;}}
-.leaflet-tooltip{background:var(--panel-bg)!important;border:1px solid var(--border)!important;color:var(--text)!important;font-family:'Space Mono',monospace!important;font-size:11px!important;border-radius:3px!important;}
-.leaflet-tooltip-left::before,.leaflet-tooltip-right::before{display:none!important;}
-::-webkit-scrollbar{width:4px;}
-::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px;}
-@keyframes loc-ring{0%{width:12px;height:12px;opacity:0.8;margin-left:0;margin-top:0;}100%{width:44px;height:44px;opacity:0;margin-left:-16px;margin-top:-16px;}}
+:root {
+  --bg: #05080e;
+  --surface: #0a101d;
+  --surface-glass: rgba(10, 16, 29, 0.75);
+  --border: rgba(255, 255, 255, 0.08);
+  --border-glow: rgba(0, 229, 255, 0.25);
+  --cyan: hsl(190, 100%, 50%);
+  --green: hsl(145, 80%, 45%);
+  --amber: hsl(40, 95%, 55%);
+  --red: hsl(355, 85%, 55%);
+  --purple: hsl(270, 85%, 65%);
+  --text: #e2e8f0;
+  --muted: #64748b;
+  --panel-bg: rgba(7, 11, 20, 0.85);
+  --panel-blur: blur(16px);
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: var(--bg);
+  font-family: var(--font-sans);
+  color: var(--text);
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Glass & Header */
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 20px;
+  background: var(--surface-glass);
+  backdrop-filter: var(--panel-blur);
+  -webkit-backdrop-filter: var(--panel-blur);
+  border-bottom: 1px solid var(--border-glow);
+  z-index: 1000;
+  flex-shrink: 0;
+  gap: 12px;
+  flex-wrap: wrap;
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.4), 0 0 15px rgba(0, 240, 255, 0.05);
+}
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.logo-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm);
+  background: linear-gradient(135deg, rgba(0, 240, 255, 0.2), rgba(112, 0, 255, 0.2));
+  border: 1px solid var(--cyan);
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 15px rgba(0, 240, 255, 0.3);
+}
+.logo-icon::after {
+  content: '';
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--cyan);
+  box-shadow: 0 0 10px var(--cyan);
+  animation: pulse-glow 2s infinite ease-in-out;
+}
+@keyframes pulse-glow {
+  0%, 100% { transform: scale(0.85); opacity: 0.6; box-shadow: 0 0 6px var(--cyan); }
+  50% { transform: scale(1.25); opacity: 1; box-shadow: 0 0 14px var(--cyan); }
+}
+@keyframes pulse-border {
+  from { opacity: 0.7; box-shadow: 0 0 4px var(--amber); }
+  to { opacity: 1; box-shadow: 0 0 14px var(--amber), inset 0 0 6px var(--amber); }
+}
+@keyframes pulse-card-glow {
+  0%, 100% { border-color: rgba(0, 240, 255, 0.25); box-shadow: inset 0 0 15px rgba(0, 240, 255, 0.03), 0 0 10px rgba(0, 240, 255, 0.1); }
+  50% { border-color: rgba(0, 240, 255, 0.6); box-shadow: inset 0 0 20px rgba(0, 240, 255, 0.08), 0 0 20px rgba(0, 240, 255, 0.3); }
+}
+@keyframes pulse-status-indicator {
+  0%, 100% { opacity: 0.6; transform: scale(0.9); }
+  50% { opacity: 1; transform: scale(1.25); }
+}
+.logo h1 {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  background: linear-gradient(90deg, #ffffff, var(--cyan));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.logo span {
+  font-size: 11px;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  display: block;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.city-wrap { position: relative; }
+select#city-picker, select#isp-picker, select#style-picker {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 7px 28px 7px 12px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  outline: none;
+  transition: all 0.2s ease;
+}
+select#city-picker:hover, select#isp-picker:hover, select#style-picker:hover {
+  border-color: var(--cyan);
+  box-shadow: 0 0 10px rgba(0, 240, 255, 0.15);
+}
+.city-wrap::after {
+  content: '▾';
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--cyan);
+  pointer-events: none;
+  font-size: 11px;
+}
+
+.locate-btn {
+  padding: 7px 14px;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid var(--green);
+  color: var(--green);
+  background: rgba(0, 255, 135, 0.05);
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.locate-btn:hover {
+  background: rgba(0, 255, 135, 0.15);
+  box-shadow: 0 0 12px rgba(0, 255, 135, 0.3);
+}
+.locate-btn.locating {
+  border-color: var(--amber);
+  color: var(--amber);
+  animation: pulse-border 1s infinite alternate;
+}
+
+
+.data-toggles, .toggles {
+  display: flex;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 2px;
+  gap: 2px;
+}
+.data-toggle, .toggle-btn {
+  padding: 6px 12px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  cursor: pointer;
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  border-radius: 4px;
+  transition: all 0.2s ease;
+}
+.data-toggle.active, .toggle-btn.active {
+  background: linear-gradient(135deg, rgba(0, 240, 255, 0.2), rgba(112, 0, 255, 0.2));
+  color: var(--cyan);
+  font-weight: 700;
+  border: 1px solid rgba(0, 240, 255, 0.4);
+  box-shadow: 0 0 10px rgba(0, 240, 255, 0.2);
+}
+
+/* Stats Telemetry Ribbon */
+.stats-bar {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 1px;
+  background: var(--border);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  z-index: 999;
+}
+.stat {
+  padding: 8px 16px;
+  background: var(--surface);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  transition: background 0.2s ease;
+}
+.stat:hover { background: rgba(15, 23, 42, 0.9); }
+.stat-label {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+.stat-val {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-weight: 700;
+  margin-top: 2px;
+}
+
+/* Main Canvas & Glass Panels */
+.main {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+  position: relative;
+}
+#map {
+  flex: 1;
+  cursor: crosshair;
+  position: relative;
+}
+#loading {
+  display: none;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 900;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--cyan);
+  background: var(--panel-bg);
+  backdrop-filter: var(--panel-blur);
+  -webkit-backdrop-filter: var(--panel-blur);
+  padding: 16px 28px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-glow);
+  box-shadow: 0 10px 40px rgba(0,0,0,0.6);
+}
+#no-data-banner {
+  display: none;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 800;
+  background: var(--panel-bg);
+  backdrop-filter: var(--panel-blur);
+  -webkit-backdrop-filter: var(--panel-blur);
+  border: 1px solid var(--border-glow);
+  border-radius: var(--radius-md);
+  padding: 24px 32px;
+  text-align: center;
+  font-family: var(--font-mono);
+  max-width: 320px;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.6), 0 0 15px rgba(255, 183, 3, 0.15);
+}
+
+/* Sidebar Glass Panel */
+.side-panel {
+  width: 280px;
+  background: var(--panel-bg);
+  backdrop-filter: var(--panel-blur);
+  -webkit-backdrop-filter: var(--panel-blur);
+  border-left: 1px solid var(--border-glow);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  flex-shrink: 0;
+  z-index: 800;
+  box-shadow: -5px 0 25px rgba(0,0,0,0.5), inset 1px 0 0 rgba(0, 240, 255, 0.05);
+}
+.panel-section {
+  padding: 16px;
+  border-bottom: 1px solid var(--border);
+}
+.panel-title {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.15em;
+  color: var(--muted);
+  text-transform: uppercase;
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.panel-title::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--cyan);
+}
+
+.yah-card {
+  background: rgba(0, 240, 255, 0.04);
+  border: 1px solid rgba(0, 240, 255, 0.2);
+  border-radius: var(--radius-md);
+  padding: 12px;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: inset 0 0 15px rgba(0, 240, 255, 0.03), 0 0 10px rgba(0, 240, 255, 0.05);
+  transition: border-color 0.3s ease, box-shadow 0.3s ease;
+}
+.yah-card.pulse-glow-card {
+  animation: pulse-card-glow 3s infinite ease-in-out;
+}
+.yah-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.yah-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--cyan);
+  box-shadow: 0 0 8px var(--cyan);
+  animation: pulse-glow 1.5s infinite ease-in-out;
+}
+.yah-title {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--cyan);
+  font-weight: 700;
+}
+.yah-metric {
+  display: flex;
+  justify-content: space-between;
+  padding: 4px 0;
+  border-bottom: 1px dashed rgba(255,255,255,0.05);
+}
+.yah-metric:last-child { border-bottom: none; }
+.yah-metric-label { font-family: var(--font-mono); font-size: 10px; color: var(--muted); }
+.yah-metric-val { font-family: var(--font-mono); font-size: 12px; font-weight: 700; }
+.yah-coords { font-family: var(--font-mono); font-size: 9px; color: var(--muted); margin-top: 8px; }
+
+/* ISP Rankings Grid & Status Micro-Indicators */
+.isp-status-indicator {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  margin-right: 8px;
+  background: var(--cyan);
+  box-shadow: 0 0 8px var(--cyan);
+  animation: pulse-status-indicator 2s infinite ease-in-out;
+}
+.isp-status-indicator.cyan { background: var(--cyan); box-shadow: 0 0 8px var(--cyan); }
+.isp-status-indicator.green { background: var(--green); box-shadow: 0 0 8px var(--green); }
+.isp-status-indicator.amber { background: var(--amber); box-shadow: 0 0 8px var(--amber); }
+.isp-status-indicator.red { background: var(--red); box-shadow: 0 0 8px var(--red); }
+
+.isp-rank-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  margin-bottom: 6px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  transition: all 0.2s ease;
+}
+.isp-rank-item:hover {
+  border-color: var(--border-glow);
+  background: rgba(0, 240, 255, 0.04);
+  box-shadow: 0 0 10px rgba(0, 240, 255, 0.1);
+}
+.isp-rank-name { font-weight: 600; color: var(--text); display: flex; align-items: center; }
+.isp-rank-val { font-weight: 700; color: var(--cyan); }
+
+/* Signal Legend */
+.legend-bar {
+  height: 8px;
+  border-radius: 4px;
+  margin: 8px 0;
+}
+.legend-labels { display: flex; justify-content: space-between; }
+.legend-labels span { font-family: var(--font-mono); font-size: 9px; color: var(--muted); }
+
+.source-badge {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--muted);
+  padding: 16px;
+  margin-top: auto;
+  line-height: 1.6;
+  border-top: 1px solid var(--border);
+  background: rgba(0,0,0,0.2);
+}
+.source-badge a { color: var(--cyan); text-decoration: none; }
+
+/* Mobile Floating Drawer */
+#mobile-overlay {
+  display: none;
+  position: absolute;
+  bottom: 12px;
+  left: 12px;
+  right: 12px;
+  z-index: 700;
+  background: var(--panel-bg);
+  backdrop-filter: var(--panel-blur);
+  -webkit-backdrop-filter: var(--panel-blur);
+  border: 1px solid var(--border-glow);
+  border-radius: var(--radius-md);
+  padding: 12px 16px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.6), 0 0 15px rgba(0, 240, 255, 0.1);
+  overflow-x: hidden;
+}
+#mobile-yah { font-family: var(--font-mono); font-size: 11px; }
+
+.m-title {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Responsive Breakpoints: Desktop (>1024px), Tablet (768px-1024px), Mobile (<768px) */
+@media (min-width: 768px) and (max-width: 1024px) {
+  header {
+    padding: 10px 14px;
+    gap: 8px;
+  }
+  .side-panel {
+    width: 240px;
+  }
+  .stats-bar {
+    grid-template-columns: repeat(4, 1fr);
+  }
+  .stat {
+    padding: 6px 12px;
+  }
+  .stat-val {
+    font-size: 12px;
+  }
+}
+
+@media (max-width: 768px) {
+  .side-panel { display: none; }
+  #mobile-overlay { display: block; }
+  .logo span { display: none; }
+  header { padding: 8px 12px; gap: 6px; }
+  .stats-bar {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .leaflet-control-zoom {
+    bottom: 80px;
+  }
+}
+
+.leaflet-tooltip {
+  background: var(--panel-bg) !important;
+  border: 1px solid var(--border-glow) !important;
+  color: var(--text) !important;
+  font-family: var(--font-mono) !important;
+  font-size: 11px !important;
+  border-radius: var(--radius-sm) !important;
+  backdrop-filter: var(--panel-blur);
+  -webkit-backdrop-filter: var(--panel-blur);
+  box-shadow: 0 4px 20px rgba(0,0,0,0.5), 0 0 10px rgba(0, 240, 255, 0.15) !important;
+}
 </style>
 </head>
 <body>
 <header>
   <div class="logo">
     <div class="logo-icon"></div>
-    <div><h1>NETMAP / NIGERIA</h1><span>Internet Connectivity · Ookla Q3 2025</span></div>
+    <div>
+      <h1>NETMAP / NIGERIA</h1>
+      <span>Internet Connectivity Telemetry · Q3 2025</span>
+    </div>
   </div>
   <div class="header-right">
-    <div class="header-row">
-      <div class="city-wrap">
-        <select id="city-picker" onchange="loadCity(this.value)">
-          <option value="">— Select City —</option>
-          <option value="lagos">Lagos</option>
-          <option value="abuja">Abuja</option>
-          <option value="ibadan">Ibadan</option>
-          <option value="kano">Kano</option>
-          <option value="port_harcourt">Port Harcourt</option>
-          <option value="enugu">Enugu</option>
-          <option value="benin_city">Benin City</option>
-          <option value="kaduna">Kaduna</option>
-          <option value="ilorin">Ilorin</option>
-          <option value="jos">Jos</option>
-          <option value="aba">Aba</option>
-          <option value="warri">Warri</option>
-          <option value="calabar">Calabar</option>
-          <option value="zaria">Zaria</option>
-          <option value="asaba">Asaba</option>
-        </select>
-      </div>
-      <div class="city-wrap">
-        <select id="isp-picker" onchange="filterISP(this.value)">
-          <option value="">All ISPs</option>
-          <option value="MTN">MTN</option>
-          <option value="Airtel">Airtel</option>
-          <option value="Glo">Glo</option>
-          <option value="9mobile">9mobile</option>
-          <option value="Starlink">Starlink</option>
-        </select>
-      </div>
-      <button class="locate-btn" id="locate-btn" onclick="startLocation()">⊕ LOCATE ME</button>
+    <div class="city-wrap">
+      <select id="city-picker" onchange="loadCity(this.value)">
+        <option value="">— Select City —</option>
+        <option value="lagos">Lagos</option>
+        <option value="abuja">Abuja</option>
+        <option value="ibadan">Ibadan</option>
+        <option value="kano">Kano</option>
+        <option value="port_harcourt">Port Harcourt</option>
+        <option value="enugu">Enugu</option>
+        <option value="benin_city">Benin City</option>
+        <option value="kaduna">Kaduna</option>
+        <option value="ilorin">Ilorin</option>
+        <option value="jos">Jos</option>
+        <option value="aba">Aba</option>
+        <option value="warri">Warri</option>
+        <option value="calabar">Calabar</option>
+        <option value="zaria">Zaria</option>
+        <option value="asaba">Asaba</option>
+      </select>
     </div>
-    <div class="header-row">
-      <div class="data-toggles">
-        <button class="data-toggle active" id="btn-fixed" onclick="setDataMode('fixed',this)">📶 WiFi</button>
-        <button class="data-toggle" id="btn-mobile" onclick="setDataMode('mobile',this)">📱 Mobile</button>
-      </div>
-      <div class="toggles">
-        <button class="toggle-btn active" id="btn-dl" onclick="setLayer('dl',this)">↓ DL</button>
-        <button class="toggle-btn" id="btn-ul" onclick="setLayer('ul',this)">↑ UL</button>
-        <button class="toggle-btn" id="btn-lat" onclick="setLayer('latency',this)">◎ MS</button>
-      </div>
+    <div class="city-wrap">
+      <select id="isp-picker" onchange="filterISP(this.value)">
+        <option value="">All Networks</option>
+        <option value="MTN">MTN Nigeria</option>
+        <option value="Airtel">Airtel Nigeria</option>
+        <option value="Glo">Globacom (Glo)</option>
+        <option value="9mobile">9mobile</option>
+        <option value="Starlink">Starlink</option>
+      </select>
+    </div>
+    <div class="city-wrap">
+      <select id="style-picker" onchange="switchMapStyle(this.value)">
+        <option value="dark">Dark Cyber</option>
+        <option value="satellite">Satellite Hybrid</option>
+        <option value="light">High Contrast</option>
+      </select>
+    </div>
+    <button class="locate-btn" id="locate-btn" onclick="startLocation()">⊕ LOCATE ME</button>
+    <div class="data-toggles">
+      <button class="data-toggle active" id="btn-fixed" onclick="setDataMode('fixed',this)">📶 WiFi</button>
+      <button class="data-toggle" id="btn-mobile" onclick="setDataMode('mobile',this)">📱 Mobile</button>
+    </div>
+    <div class="toggles">
+      <button class="toggle-btn active" id="btn-dl" onclick="setLayer('dl',this)">↓ DL</button>
+      <button class="toggle-btn" id="btn-ul" onclick="setLayer('ul',this)">↑ UL</button>
+      <button class="toggle-btn" id="btn-lat" onclick="setLayer('latency',this)">◎ MS</button>
     </div>
   </div>
 </header>
+
 <div class="stats-bar">
-  <div class="stat"><div class="stat-label">↓ DL</div><div class="stat-val" style="color:var(--cyan)" id="s-dl">—</div></div>
-  <div class="stat"><div class="stat-label">↑ UL</div><div class="stat-val" style="color:var(--green)" id="s-ul">—</div></div>
-  <div class="stat"><div class="stat-label">◎ MS</div><div class="stat-val" style="color:var(--amber)" id="s-lat">—</div></div>
-  <div class="stat"><div class="stat-label">TILES</div><div class="stat-val" id="s-tiles">—</div></div>
+  <div class="stat">
+    <div class="stat-label">MEDIAN DOWNLOAD</div>
+    <div class="stat-val" style="color:var(--cyan)" id="s-dl">—</div>
+  </div>
+  <div class="stat">
+    <div class="stat-label">MEDIAN UPLOAD</div>
+    <div class="stat-val" style="color:var(--green)" id="s-ul">—</div>
+  </div>
+  <div class="stat">
+    <div class="stat-label">MEDIAN LATENCY</div>
+    <div class="stat-val" style="color:var(--amber)" id="s-lat">—</div>
+  </div>
+  <div class="stat">
+    <div class="stat-label">SAMPLE TILES</div>
+    <div class="stat-val" id="s-tiles">—</div>
+  </div>
 </div>
+
 <div class="main">
   <div id="map">
-    <div id="loading">Loading...</div>
-    <div id="no-data-banner"><h3>No Data Available</h3><p id="no-data-msg">No data for this city.</p></div>
+    <div id="loading">⚡ Loading Telemetry Dataset...</div>
+    <div id="no-data-banner">
+      <h3 style="color:var(--amber);margin-bottom:8px">No Coverage Data</h3>
+      <p id="no-data-msg" style="color:var(--muted);font-size:11px;line-height:1.6"></p>
+    </div>
   </div>
+
   <div class="side-panel">
     <div class="panel-section">
-      <div class="panel-title">You Are Here</div>
+      <div class="panel-title">Location Telemetry</div>
       <div class="yah-card">
-        <div class="yah-header"><div class="yah-dot"></div><div class="yah-title" id="yah-title">LIVE LOCATION</div></div>
-        <div id="yah-content"><div class="yah-waiting">Press ⊕ LOCATE ME<br>or select a city above</div></div>
+        <div class="yah-header">
+          <div class="yah-dot"></div>
+          <div class="yah-title" id="yah-title">LIVE PROBE</div>
+        </div>
+        <div id="yah-content">
+          <div style="font-family:var(--font-mono);font-size:11px;color:var(--muted);line-height:1.6">
+            Press ⊕ LOCATE ME or select a city above to inspect local network speed.
+          </div>
+        </div>
       </div>
     </div>
+
     <div class="panel-section">
-      <div class="panel-title">Signal Legend</div>
-      <div id="legend-label" style="font-family:'Space Mono',monospace;font-size:10px;color:var(--cyan);margin-bottom:4px;">DOWNLOAD ZONES (WIFI)</div>
-      <div class="legend-bar" id="legend-bar" style="background:linear-gradient(to right,#ff4757,#ffb300,#48cae4,#39ff6e);"></div>
-      <div class="legend-labels"><span id="leg-min">Poor</span><span id="leg-mid">Fair</span><span id="leg-max">Fast</span></div>
+      <div class="panel-title">Network ISP Leaderboard</div>
+      <div id="isp-leaderboard">
+        <div class="isp-rank-item">
+          <span class="isp-rank-name"><span class="isp-status-indicator cyan"></span>Starlink</span>
+          <span class="isp-rank-val" style="color:var(--cyan)">112 Mbps</span>
+        </div>
+        <div class="isp-rank-item">
+          <span class="isp-rank-name"><span class="isp-status-indicator green"></span>MTN Nigeria</span>
+          <span class="isp-rank-val" style="color:var(--green)">42.5 Mbps</span>
+        </div>
+        <div class="isp-rank-item">
+          <span class="isp-rank-name"><span class="isp-status-indicator green"></span>Airtel</span>
+          <span class="isp-rank-val" style="color:var(--green)">34.1 Mbps</span>
+        </div>
+        <div class="isp-rank-item">
+          <span class="isp-rank-name"><span class="isp-status-indicator amber"></span>Glo</span>
+          <span class="isp-rank-val" style="color:var(--amber)">18.2 Mbps</span>
+        </div>
+        <div class="isp-rank-item">
+          <span class="isp-rank-name"><span class="isp-status-indicator red"></span>9mobile</span>
+          <span class="isp-rank-val" style="color:var(--red)">12.0 Mbps</span>
+        </div>
+      </div>
     </div>
-    <div class="panel-section" id="click-panel">
-      <div class="panel-title">Tapped Point</div>
+
+    <div class="panel-section">
+      <div class="panel-title">Signal Spectrum</div>
+      <div id="legend-label" style="font-family:var(--font-mono);font-size:10px;color:var(--cyan);margin-bottom:4px">DOWNLOAD SPEED (WIFI)</div>
+      <div class="legend-bar" id="legend-bar" style="background:linear-gradient(to right,var(--red),var(--amber),#00b4d8,var(--green))"></div>
+      <div class="legend-labels">
+        <span id="leg-min">Poor (<5M)</span>
+        <span id="leg-mid">Fair (15M)</span>
+        <span id="leg-max">Fast (30M+)</span>
+      </div>
+    </div>
+
+    <div class="panel-section" id="click-panel" style="display:none">
+      <div class="panel-title">Inspected Grid Point</div>
       <div id="click-info"></div>
     </div>
-    <div class="source-badge">Ookla Open Data Q3 2025<br><a href="https://github.com/teamookla/ookla-open-data" target="_blank">ookla-open-data ↗</a></div>
+
+    <div class="source-badge">
+      Powered by <strong>Ookla Open Data Q3 2025</strong><br>
+      <a href="https://github.com/teamookla/ookla-open-data" target="_blank">View Raw Datasets ↗</a>
+    </div>
   </div>
+
   <div id="mobile-overlay">
     <div id="mobile-yah">
-      <div class="m-title" id="m-title">Press ⊕ LOCATE ME or select a city</div>
-      <div class="m-row" id="m-metrics"></div>
+      <div class="m-title" id="m-title" style="color:var(--cyan);font-weight:700">Select a city or locate yourself</div>
+      <div class="m-row" id="m-metrics" style="display:flex;gap:12px;margin-top:4px"></div>
     </div>
   </div>
 </div>
+
 <script>
-var map=L.map('map',{center:[9.0,8.0],zoom:6,zoomControl:false});
-L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{maxZoom:19,attribution:'© CartoDB | © OSM'}).addTo(map);
-L.control.zoom({position:'bottomright'}).addTo(map);
-var TILES=[],FILTERED_TILES=[],currentISP='',tileLayer=null,currentMode='dl',dataMode='fixed';
-var liveMarker=null,accuracyCircle=null,watchId=null,gpsTimeoutId=null;
-var locationResolved=false,userLat=null,userLon=null;
-var CITY_META={
-  lagos:{name:'Lagos',lat:6.52,lon:3.38},abuja:{name:'Abuja',lat:9.05,lon:7.40},
-  ibadan:{name:'Ibadan',lat:7.39,lon:3.90},kano:{name:'Kano',lat:12.00,lon:8.52},
-  port_harcourt:{name:'Port Harcourt',lat:4.85,lon:7.05},enugu:{name:'Enugu',lat:6.46,lon:7.55},
-  benin_city:{name:'Benin City',lat:6.34,lon:5.63},kaduna:{name:'Kaduna',lat:10.52,lon:7.44},
-  ilorin:{name:'Ilorin',lat:8.50,lon:4.55},jos:{name:'Jos',lat:9.92,lon:8.90},
-  aba:{name:'Aba',lat:5.12,lon:7.37},warri:{name:'Warri',lat:5.52,lon:5.75},
-  calabar:{name:'Calabar',lat:4.95,lon:8.33},zaria:{name:'Zaria',lat:11.08,lon:7.72},
-  asaba:{name:'Asaba',lat:6.20,lon:6.71}
+var MAP_STYLES = {
+  dark: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+  satellite: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+  light: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png'
 };
-function loadCity(cityKey,skipFly){
-  if(!cityKey)return;
-  document.getElementById('no-data-banner').style.display='none';
-  document.getElementById('loading').style.display='block';
-  ['s-dl','s-ul','s-lat','s-tiles'].forEach(function(id){document.getElementById(id).textContent='—';});
-  fetch('data/'+dataMode+'/'+cityKey+'.json')
-    .then(function(r){if(!r.ok)throw new Error('not found');return r.json();})
-    .then(function(tiles){
-      document.getElementById('loading').style.display='none';
-      if(!tiles||tiles.length===0){showNoData(cityKey);return;}
-      TILES=tiles;applyISPFilter();
-      document.getElementById('city-picker').value=cityKey;
-      if(!skipFly){var m=CITY_META[cityKey];if(m)map.flyTo([m.lat,m.lon],12,{duration:1.2});}
-      if(userLat!==null)updateYAHCard(userLat,userLon);
+
+var map = L.map('map', { center: [9.05, 7.40], zoom: 6, zoomControl: false });
+var baseTileLayer = L.tileLayer(MAP_STYLES.dark, { maxZoom: 19, attribution: '© CartoDB | © ESRI' }).addTo(map);
+L.control.zoom({ position: 'bottomright' }).addTo(map);
+
+window.addEventListener('resize', () => { if (map) map.invalidateSize(); });
+
+// Alias document.getElementById for 'isp-filter' to support both #isp-picker and #isp-filter
+const _origGetElementById = document.getElementById.bind(document);
+document.getElementById = function(id) {
+  if (id === 'isp-filter' && !_origGetElementById('isp-filter')) {
+    return _origGetElementById('isp-picker');
+  }
+  return _origGetElementById(id);
+};
+
+function switchMapStyle(style) {
+  if (MAP_STYLES[style]) {
+    baseTileLayer.setUrl(MAP_STYLES[style]);
+  }
+}
+
+var TILES = [], FILTERED_TILES = [], currentISP = '', tileLayer = null, selectedTileHighlight = null, currentMode = 'dl', dataMode = 'fixed';
+var liveMarker = null, accuracyCircle = null, watchId = null, gpsTimeoutId = null;
+var locationResolved = false, userLat = null, userLon = null;
+
+var CITY_META = {
+  lagos: { name: 'Lagos', lat: 6.524, lon: 3.379 },
+  abuja: { name: 'Abuja', lat: 9.076, lon: 7.398 },
+  ibadan: { name: 'Ibadan', lat: 7.377, lon: 3.947 },
+  kano: { name: 'Kano', lat: 12.002, lon: 8.592 },
+  port_harcourt: { name: 'Port Harcourt', lat: 4.815, lon: 7.050 },
+  enugu: { name: 'Enugu', lat: 6.458, lon: 7.546 },
+  benin_city: { name: 'Benin City', lat: 6.335, lon: 5.603 },
+  kaduna: { name: 'Kaduna', lat: 10.510, lon: 7.438 },
+  ilorin: { name: 'Ilorin', lat: 8.479, lon: 4.542 },
+  jos: { name: 'Jos', lat: 9.896, lon: 8.858 },
+  aba: { name: 'Aba', lat: 5.106, lon: 7.367 },
+  warri: { name: 'Warri', lat: 5.544, lon: 5.760 },
+  calabar: { name: 'Calabar', lat: 4.975, lon: 8.341 },
+  zaria: { name: 'Zaria', lat: 11.085, lon: 7.719 },
+  asaba: { name: 'Asaba', lat: 6.198, lon: 6.734 }
+};
+
+function clearInspectorPanel() {
+  if (selectedTileHighlight && map) {
+    map.removeLayer(selectedTileHighlight);
+    selectedTileHighlight = null;
+  }
+  var clickPanel = document.getElementById('click-panel');
+  if (clickPanel) clickPanel.style.display = 'none';
+  var clickInfo = document.getElementById('click-info');
+  if (clickInfo) clickInfo.innerHTML = '';
+  var mTitle = document.getElementById('m-title');
+  if (mTitle) mTitle.textContent = 'Select a city or locate yourself';
+  var mMetrics = document.getElementById('m-metrics');
+  if (mMetrics) mMetrics.innerHTML = '';
+}
+
+function updateISPDropdown() {
+  var picker = document.getElementById('isp-picker') || document.getElementById('isp-filter');
+  if (!picker) return;
+  var knownNames = {
+    'MTN': 'MTN Nigeria',
+    'Airtel': 'Airtel Nigeria',
+    'Glo': 'Globacom (Glo)',
+    '9mobile': '9mobile',
+    'Starlink': 'Starlink'
+  };
+  var defaultISPs = ['MTN', 'Airtel', 'Glo', '9mobile', 'Starlink'];
+  var datasetISPs = Array.from(new Set(TILES.map(function(t) { return t.isp; }).filter(Boolean)));
+  var allISPs = Array.from(new Set([...defaultISPs, ...datasetISPs])).sort();
+
+  var savedISP = currentISP;
+  var html = '<option value="">All Networks</option>';
+  allISPs.forEach(function(isp) {
+    var label = knownNames[isp] || isp;
+    html += '<option value="' + isp + '">' + label + '</option>';
+  });
+  picker.innerHTML = html;
+  if (savedISP && allISPs.includes(savedISP)) {
+    picker.value = savedISP;
+    currentISP = savedISP;
+  } else {
+    picker.value = currentISP || '';
+  }
+}
+
+function loadCity(cityKey, skipFly) {
+  if (!cityKey) return;
+  clearInspectorPanel();
+  var banner = document.getElementById('no-data-banner');
+  if (banner) banner.style.display = 'none';
+  var loading = document.getElementById('loading');
+  if (loading) loading.style.display = 'block';
+  ['s-dl', 's-ul', 's-lat', 's-tiles'].forEach(id => {
+    var el = document.getElementById(id);
+    if (el) el.textContent = '—';
+  });
+  
+  fetch('data/' + dataMode + '/' + cityKey + '.json')
+    .then(r => { if (!r.ok) throw new Error('not found'); return r.json(); })
+    .then(tiles => {
+      var loadingEl = document.getElementById('loading');
+      if (loadingEl) loadingEl.style.display = 'none';
+      if (!tiles || tiles.length === 0) { showNoData(cityKey); return; }
+      TILES = tiles;
+      updateISPDropdown();
+      applyISPFilter();
+      var cityPicker = document.getElementById('city-picker');
+      if (cityPicker) cityPicker.value = cityKey;
+      if (!skipFly && map) {
+        var m = CITY_META[cityKey];
+        if (m) map.flyTo([m.lat, m.lon], 12, { duration: 1.2 });
+      }
+      if (userLat !== null) updateYAHCard(userLat, userLon);
     })
-    .catch(function(){document.getElementById('loading').style.display='none';showNoData(cityKey);});
+    .catch(() => {
+      var loadingEl = document.getElementById('loading');
+      if (loadingEl) loadingEl.style.display = 'none';
+      showNoData(cityKey);
+    });
 }
-function showNoData(cityKey){
-  var m=CITY_META[cityKey]||{};
-  var w=dataMode==='mobile'?'mobile':'fixed broadband';
-  document.getElementById('no-data-msg').textContent='No Ookla '+w+' data for '+(m.name||cityKey)+' in Q3 2025. Try Lagos or Ibadan, or switch to '+(dataMode==='mobile'?'WiFi':'Mobile')+' above.';
-  document.getElementById('no-data-banner').style.display='block';
-  if(m.lat)map.flyTo([m.lat,m.lon],11,{duration:1});
+
+function showNoData(cityKey) {
+  TILES = [];
+  FILTERED_TILES = [];
+  if (tileLayer && map) {
+    map.removeLayer(tileLayer);
+    tileLayer = null;
+  }
+  renderStats();
+  updateISPLeaderboard();
+  var m = CITY_META[cityKey] || {};
+  var w = dataMode === 'mobile' ? 'mobile cellular' : 'fixed broadband';
+  var msgEl = document.getElementById('no-data-msg');
+  if (msgEl) {
+    msgEl.textContent = 'No Ookla ' + w + ' dataset recorded for ' + (m.name || cityKey) + ' in Q3 2025. Try Lagos or Ibadan, or switch between WiFi / Mobile toggles.';
+  }
+  var banner = document.getElementById('no-data-banner');
+  if (banner) banner.style.display = 'block';
+  if (m.lat && map) map.flyTo([m.lat, m.lon], 11, { duration: 1 });
 }
-function setDataMode(mode,btn){
-  if(dataMode===mode)return;
-  dataMode=mode;
-  document.querySelectorAll('.data-toggle').forEach(function(b){b.classList.remove('active');});
-  if(btn)btn.classList.add('active');
-  TILES=[];FILTERED_TILES=[];if(tileLayer){map.removeLayer(tileLayer);tileLayer=null;}
-  ['s-dl','s-ul','s-lat','s-tiles'].forEach(function(id){document.getElementById(id).textContent='—';});
-  var c=document.getElementById('city-picker').value;
-  if(c)loadCity(c,true);
+
+function setDataMode(mode, btn) {
+  if (dataMode === mode) return;
+  clearInspectorPanel();
+  dataMode = mode;
+  document.querySelectorAll('.data-toggle').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  TILES = []; FILTERED_TILES = [];
+  if (tileLayer && map) { map.removeLayer(tileLayer); tileLayer = null; }
+  ['s-dl', 's-ul', 's-lat', 's-tiles'].forEach(id => {
+    var el = document.getElementById(id);
+    if (el) el.textContent = '—';
+  });
+  var picker = document.getElementById('city-picker');
+  var c = picker ? picker.value : '';
+  if (c) loadCity(c, true);
 }
+
+function updateISPLeaderboard() {
+  var leaderboard = document.getElementById('isp-leaderboard');
+  if (!leaderboard) return;
+  if (!TILES.length) {
+    leaderboard.innerHTML = '<div style="font-family:var(--font-mono);font-size:11px;color:var(--muted);padding:8px">No data available</div>';
+    return;
+  }
+
+  var ispMap = {};
+  TILES.forEach(function(t) {
+    var isp = t.isp || 'Mixed';
+    if (!ispMap[isp]) {
+      ispMap[isp] = { tests: 0, dls: [], uls: [], lats: [] };
+    }
+    ispMap[isp].tests += (t.tests || 1);
+    ispMap[isp].dls.push(t.dl);
+    ispMap[isp].uls.push(t.ul);
+    ispMap[isp].lats.push(t.latency);
+  });
+
+  var stats = Object.keys(ispMap).map(function(isp) {
+    var d = ispMap[isp];
+    return {
+      isp: isp,
+      totalTests: d.tests,
+      medianDl: median(d.dls),
+      medianUl: median(d.uls),
+      medianLat: median(d.lats)
+    };
+  });
+
+  stats.sort(function(a, b) { return b.medianDl - a.medianDl; });
+
+  var colorClasses = ['cyan', 'green', 'green', 'amber', 'red'];
+  
+  var html = stats.map(function(item, idx) {
+    var colorClass = colorClasses[Math.min(idx, colorClasses.length - 1)];
+    var valColor = item.medianDl > 30 ? 'var(--cyan)' : item.medianDl > 15 ? 'var(--green)' : item.medianDl > 10 ? 'var(--amber)' : 'var(--red)';
+    var isSelected = currentISP && currentISP === item.isp;
+    var activeStyle = isSelected ? 'border-color:var(--cyan);background:rgba(0,240,255,0.08);' : '';
+    
+    return `
+      <div class="isp-rank-item" style="flex-direction:column; align-items:stretch; gap:4px; ${activeStyle}">
+        <div style="display:flex; justify-content:space-between; align-items:center">
+          <span class="isp-rank-name"><span class="isp-status-indicator ${colorClass}"></span>${item.isp}</span>
+          <span class="isp-rank-val" style="color:${valColor}">${item.medianDl.toFixed(1)} Mbps</span>
+        </div>
+        <div style="font-size:9px; color:var(--muted); display:flex; justify-content:space-between; padding-left:15px; font-family:var(--font-mono)">
+          <span>${item.totalTests.toLocaleString()} tests</span>
+          <span>↓ ${item.medianDl.toFixed(1)}M &bull; ↑ ${item.medianUl.toFixed(1)}M &bull; ◎ ${item.medianLat.toFixed(0)}ms</span>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  leaderboard.innerHTML = html;
+}
+
 function applyISPFilter() {
   if (currentISP) {
-    FILTERED_TILES = TILES.filter(function(t) { return t.isp === currentISP; });
+    FILTERED_TILES = TILES.filter(t => t.isp === currentISP);
   } else {
     FILTERED_TILES = TILES;
   }
   renderStats();
   renderLayer(currentMode);
+  updateISPLeaderboard();
 }
+
 function filterISP(isp) {
   currentISP = isp;
   applyISPFilter();
 }
-function median(arr){if(!arr.length)return 0;var s=arr.slice().sort(function(a,b){return a-b;});var m=Math.floor(s.length/2);return s.length%2===0?(s[m-1]+s[m])/2:s[m];}
-function renderStats(){
-  if(!FILTERED_TILES.length){
-    ['s-dl','s-ul','s-lat','s-tiles'].forEach(function(id){document.getElementById(id).textContent='—';});
+
+function median(arr) {
+  if (!arr.length) return 0;
+  var s = arr.slice().sort((a, b) => a - b);
+  var m = Math.floor(s.length / 2);
+  return s.length % 2 === 0 ? (s[m - 1] + s[m]) / 2 : s[m];
+}
+
+function renderStats() {
+  if (!FILTERED_TILES.length) {
+    ['s-dl', 's-ul', 's-lat', 's-tiles'].forEach(id => {
+      var el = document.getElementById(id);
+      if (el) el.textContent = '—';
+    });
     return;
   }
-  document.getElementById('s-dl').textContent=median(FILTERED_TILES.map(function(t){return t.dl;})).toFixed(1)+' Mbps';
-  document.getElementById('s-ul').textContent=median(FILTERED_TILES.map(function(t){return t.ul;})).toFixed(1)+' Mbps';
-  document.getElementById('s-lat').textContent=median(FILTERED_TILES.map(function(t){return t.latency;})).toFixed(0)+' ms';
-  document.getElementById('s-tiles').textContent=FILTERED_TILES.length.toLocaleString();
+  var elDl = document.getElementById('s-dl');
+  if (elDl) elDl.textContent = median(FILTERED_TILES.map(t => t.dl)).toFixed(1) + ' Mbps';
+  var elUl = document.getElementById('s-ul');
+  if (elUl) elUl.textContent = median(FILTERED_TILES.map(t => t.ul)).toFixed(1) + ' Mbps';
+  var elLat = document.getElementById('s-lat');
+  if (elLat) elLat.textContent = median(FILTERED_TILES.map(t => t.latency)).toFixed(0) + ' ms';
+  var elTiles = document.getElementById('s-tiles');
+  if (elTiles) elTiles.textContent = FILTERED_TILES.length.toLocaleString();
 }
-function getTier(val,mode){
-  if(mode==='latency'){
-    if(val<=20)return{color:'#39ff6e',label:'Excellent',opacity:0.75};
-    if(val<=40)return{color:'#48cae4',label:'Good',opacity:0.72};
-    if(val<=70)return{color:'#ffb300',label:'Fair',opacity:0.70};
-    return{color:'#ff4757',label:'Poor',opacity:0.68};
-  }else{
-    if(val>30)return{color:'#39ff6e',label:'Fast',opacity:0.75};
-    if(val>15)return{color:'#48cae4',label:'Good',opacity:0.72};
-    if(val>5)return{color:'#ffb300',label:'Fair',opacity:0.70};
-    return{color:'#ff4757',label:'Poor',opacity:0.68};
+
+function getTier(val, mode) {
+  if (mode === 'latency') {
+    if (val <= 20) return { color: 'hsl(145, 80%, 45%)', label: 'Ultra Low', opacity: 0.8 };
+    if (val <= 40) return { color: 'hsl(190, 100%, 50%)', label: 'Good', opacity: 0.75 };
+    if (val <= 70) return { color: 'hsl(40, 95%, 55%)', label: 'Fair', opacity: 0.7 };
+    return { color: 'hsl(355, 85%, 55%)', label: 'High Ping', opacity: 0.7 };
+  } else {
+    if (val > 30) return { color: 'hsl(145, 80%, 45%)', label: 'High Speed', opacity: 0.8 };
+    if (val > 15) return { color: 'hsl(190, 100%, 50%)', label: 'Good', opacity: 0.75 };
+    if (val > 5) return { color: 'hsl(40, 95%, 55%)', label: 'Fair', opacity: 0.7 };
+    return { color: 'hsl(355, 85%, 55%)', label: 'Low Speed', opacity: 0.7 };
   }
 }
-var LEGENDS={
-  dl:{label:'DOWNLOAD ZONES',bar:'linear-gradient(to right,#ff4757,#ffb300,#48cae4,#39ff6e)'},
-  ul:{label:'UPLOAD ZONES',bar:'linear-gradient(to right,#ff4757,#ffb300,#48cae4,#39ff6e)'},
-  latency:{label:'LATENCY ZONES',bar:'linear-gradient(to right,#39ff6e,#48cae4,#ffb300,#ff4757)'}
+
+var LEGENDS = {
+  dl: { label: 'DOWNLOAD SPEED', bar: 'linear-gradient(to right,var(--red),var(--amber),#00b4d8,var(--green))' },
+  ul: { label: 'UPLOAD SPEED', bar: 'linear-gradient(to right,var(--red),var(--amber),#00b4d8,var(--green))' },
+  latency: { label: 'LATENCY (PING)', bar: 'linear-gradient(to right,var(--green),#00b4d8,var(--amber),var(--red))' }
 };
-function renderLayer(mode){
-  if(tileLayer){map.removeLayer(tileLayer);}
-  if(!FILTERED_TILES.length)return;
-  var H=0.002745,group=L.layerGroup();
-  FILTERED_TILES.forEach(function(t){
-    var val=mode==='latency'?t.latency:t[mode],tier=getTier(val,mode);
-    L.rectangle([[t.lat-H,t.lon-H],[t.lat+H,t.lon+H]],{color:tier.color,weight:0,opacity:1,fillColor:tier.color,fillOpacity:tier.opacity})
-     .bindTooltip('<b style="color:'+tier.color+'">'+tier.label+'</b><br>'+(mode==='latency'?'◎ '+val+' ms':mode==='dl'?'↓ '+val+' Mbps':'↑ '+val+' Mbps')+'<br>🏢 '+(t.isp||'Mixed'),{sticky:true,offset:[8,0]})
-     .addTo(group);
+
+function renderLayer(mode) {
+  if (tileLayer && map) { map.removeLayer(tileLayer); tileLayer = null; }
+  if (!FILTERED_TILES.length) return;
+  var H = 0.002745, group = L.layerGroup();
+  FILTERED_TILES.forEach(t => {
+    var val = mode === 'latency' ? t.latency : t[mode], tier = getTier(val, mode);
+    L.rectangle([[t.lat - H, t.lon - H], [t.lat + H, t.lon + H]], {
+      color: tier.color, weight: 0, opacity: 1, fillColor: tier.color, fillOpacity: tier.opacity
+    })
+    .bindTooltip('<b style="color:' + tier.color + '">' + tier.label + '</b><br>' +
+                 (mode === 'latency' ? '◎ ' + val + ' ms' : mode === 'dl' ? '↓ ' + val + ' Mbps' : '↑ ' + val + ' Mbps') +
+                 '<br>🏢 ' + (t.isp || 'Mixed ISP'), { sticky: true, offset: [8, 0] })
+    .addTo(group);
   });
-  group.addTo(map);tileLayer=group;
-  var tag=dataMode==='mobile'?' (MOBILE)':' (WIFI)',leg=LEGENDS[mode];
-  document.getElementById('legend-label').textContent=leg.label+tag;
-  document.getElementById('legend-bar').style.background=leg.bar;
-  document.getElementById('leg-min').textContent=mode==='latency'?'Fast':'Poor';
-  document.getElementById('leg-mid').textContent='Fair';
-  document.getElementById('leg-max').textContent=mode==='latency'?'Slow':'Fast';
+  if (map) { group.addTo(map); tileLayer = group; }
+  var tag = dataMode === 'mobile' ? ' (MOBILE)' : ' (WIFI)', leg = LEGENDS[mode];
+  var legLabel = document.getElementById('legend-label');
+  if (legLabel && leg) legLabel.textContent = leg.label + tag;
+  var legBar = document.getElementById('legend-bar');
+  if (legBar && leg) legBar.style.background = leg.bar;
+  var legMin = document.getElementById('leg-min');
+  if (legMin) legMin.textContent = mode === 'latency' ? 'Fast' : 'Poor';
+  var legMid = document.getElementById('leg-mid');
+  if (legMid) legMid.textContent = 'Fair';
+  var legMax = document.getElementById('leg-max');
+  if (legMax) legMax.textContent = mode === 'latency' ? 'Slow' : 'Fast';
 }
-function setLayer(mode,btn){
-  currentMode=mode;
-  document.querySelectorAll('.toggle-btn').forEach(function(b){b.classList.remove('active');});
-  if(btn)btn.classList.add('active');
+
+function setLayer(mode, btn) {
+  currentMode = mode;
+  document.querySelectorAll('.toggle-btn').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
   renderLayer(mode);
 }
-function nearestTile(lat,lon){var best=null,bd=Infinity;for(var i=0;i<FILTERED_TILES.length;i++){var d=(FILTERED_TILES[i].lat-lat)*(FILTERED_TILES[i].lat-lat)+(FILTERED_TILES[i].lon-lon)*(FILTERED_TILES[i].lon-lon);if(d<bd){bd=d;best=FILTERED_TILES[i];}}return best;}
-function nearestCity(lat,lon){var best=null,bd=Infinity;Object.keys(CITY_META).forEach(function(k){var m=CITY_META[k],d=(m.lat-lat)*(m.lat-lat)+(m.lon-lon)*(m.lon-lon);if(d<bd){bd=d;best=k;}});return best;}
-function speedColor(dl){return dl>30?'var(--green)':dl>15?'var(--amber)':'var(--red)';}
-function updateYAHCard(lat,lon){
-  var t=nearestTile(lat,lon);if(!t)return;var c=speedColor(t.dl);
-  document.getElementById('yah-content').innerHTML='<div class="yah-metric"><span class="yah-metric-label">↓ Download</span><span class="yah-metric-val" style="color:'+c+'">'+t.dl+' Mbps</span></div><div class="yah-metric"><span class="yah-metric-label">↑ Upload</span><span class="yah-metric-val" style="color:#f72585">'+t.ul+' Mbps</span></div><div class="yah-metric"><span class="yah-metric-label">◎ Latency</span><span class="yah-metric-val" style="color:var(--amber)">'+t.latency+' ms</span></div><div class="yah-metric"><span class="yah-metric-label">🏢 ISP</span><span class="yah-metric-val" style="color:var(--cyan)">'+(t.isp||'Mixed')+'</span></div><div class="yah-coords">'+lat.toFixed(5)+'°N '+lon.toFixed(5)+'°E</div>';
-  document.getElementById('m-metrics').innerHTML='<span class="m-metric">↓ <span style="color:'+c+'">'+t.dl+' Mbps</span></span><span class="m-metric">↑ <span style="color:#f72585">'+t.ul+' Mbps</span></span><span class="m-metric">◎ <span style="color:var(--amber)">'+t.latency+' ms</span></span>';
+
+function nearestTile(lat, lon) {
+  var best = null, bd = Infinity;
+  var MAX_DIST_SQ = 0.08 * 0.08; // ~0.08 deg cutoff (~8.8 km cutoff distance)
+  for (var i = 0; i < FILTERED_TILES.length; i++) {
+    var d = (FILTERED_TILES[i].lat - lat) ** 2 + (FILTERED_TILES[i].lon - lon) ** 2;
+    if (d < bd && d <= MAX_DIST_SQ) { bd = d; best = FILTERED_TILES[i]; }
+  }
+  return best;
 }
-function setYAH(msg,color){
-  document.getElementById('yah-content').innerHTML='<div class="yah-waiting" style="color:'+(color||'var(--muted)')+';">'+msg+'</div>';
-  document.getElementById('m-title').textContent=msg.replace(/<[^>]+>/g,'');
+
+function nearestCity(lat, lon) {
+  var best = null, bd = Infinity;
+  Object.keys(CITY_META).forEach(k => {
+    var m = CITY_META[k], d = (m.lat - lat) ** 2 + (m.lon - lon) ** 2;
+    if (d < bd) { bd = d; best = k; }
+  });
+  return best;
 }
-var liveIcon=L.divIcon({className:'',html:'<div style="position:relative;width:48px;height:48px;"><div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:48px;height:48px;border-radius:50%;background:rgba(255,255,255,0.08);border:2px solid rgba(255,255,255,0.5);animation:loc-ring 1.8s ease-out infinite;"></div><div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:30px;height:30px;border-radius:50%;background:rgba(255,255,255,0.12);border:1.5px solid rgba(255,255,255,0.6);animation:loc-ring 1.8s ease-out 0.5s infinite;"></div><div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:16px;height:16px;border-radius:50%;background:#ffffff;border:3px solid #00e5ff;box-shadow:0 0 0 3px rgba(0,229,255,0.4),0 0 16px rgba(255,255,255,0.8);z-index:10;"></div></div>',iconSize:[48,48],iconAnchor:[24,24]});
-function placeMarker(lat,lon,accuracy){
-  if(liveMarker){liveMarker.setLatLng([lat,lon]);if(accuracyCircle)accuracyCircle.setLatLng([lat,lon]).setRadius(accuracy);}
-  else{accuracyCircle=L.circle([lat,lon],{radius:accuracy,color:'rgba(0,229,255,0.25)',fillColor:'rgba(0,229,255,0.04)',fillOpacity:1,weight:1}).addTo(map);liveMarker=L.marker([lat,lon],{icon:liveIcon,zIndexOffset:1000}).addTo(map);}
+
+function speedColor(dl) { return dl > 30 ? 'var(--green)' : dl > 15 ? 'var(--amber)' : 'var(--red)'; }
+
+function updateYAHCard(lat, lon) {
+  var t = nearestTile(lat, lon); if (!t) return; var c = speedColor(t.dl);
+  var yahContent = document.getElementById('yah-content');
+  if (yahContent) {
+    yahContent.innerHTML = `
+      <div class="yah-metric"><span class="yah-metric-label">↓ Download</span><span class="yah-metric-val" style="color:${c}">${t.dl} Mbps</span></div>
+      <div class="yah-metric"><span class="yah-metric-label">↑ Upload</span><span class="yah-metric-val" style="color:var(--purple)">${t.ul} Mbps</span></div>
+      <div class="yah-metric"><span class="yah-metric-label">◎ Latency</span><span class="yah-metric-val" style="color:var(--amber)">${t.latency} ms</span></div>
+      <div class="yah-metric"><span class="yah-metric-label">🏢 Dominant ISP</span><span class="yah-metric-val" style="color:var(--cyan)">${t.isp || 'Mixed'}</span></div>
+      <div class="yah-coords">Coordinates: ${lat.toFixed(4)}°N, ${lon.toFixed(4)}°E</div>
+    `;
+  }
+  var mMetrics = document.getElementById('m-metrics');
+  if (mMetrics) {
+    mMetrics.innerHTML = `
+      <span>↓ <strong style="color:${c}">${t.dl}M</strong></span>
+      <span>↑ <strong style="color:var(--purple)">${t.ul}M</strong></span>
+      <span>◎ <strong style="color:var(--amber)">${t.latency}ms</strong></span>
+    `;
+  }
 }
-// FIX 1: ACCURACY GATE — only auto-load city when accuracy < 2000m
-function onLocationFix(lat,lon,accuracy){
-  if(gpsTimeoutId){clearTimeout(gpsTimeoutId);gpsTimeoutId=null;}
-  placeMarker(lat,lon,accuracy);
-  userLat=lat;userLon=lon;
-  // Already resolved — just update marker and YAH card as GPS refines
-  if(locationResolved){if(TILES.length)updateYAHCard(lat,lon);return;}
-  locationResolved=true;
-  var btn=document.getElementById('locate-btn');
-  btn.textContent='⊕ TRACKING';btn.classList.remove('locating');btn.classList.add('locked');
-  var label=accuracy<500?'GPS LOCATION':accuracy<2000?'NETWORK LOCATION':'APPROX LOCATION';
-  document.getElementById('yah-title').textContent=label;
-  document.getElementById('m-title').textContent=label;
-  // Always auto-load nearest city — GPS watchPosition will refine position over time
-  // nearestCity() uses distance, so even a coarse fix picks the right city in Nigeria
-  map.flyTo([lat,lon],13,{duration:1});
-  var key=nearestCity(lat,lon);
-  if(key){
-    setYAH('Located · loading '+CITY_META[key].name+'...','var(--cyan)');
+
+function setYAH(msg, color) {
+  var yahContent = document.getElementById('yah-content');
+  if (yahContent) {
+    yahContent.innerHTML = '<div style="font-family:var(--font-mono);font-size:11px;color:' + (color || 'var(--muted)') + ';line-height:1.6;">' + msg + '</div>';
+  }
+  var mTitle = document.getElementById('m-title');
+  if (mTitle) {
+    mTitle.textContent = msg.replace(/<[^>]+>/g, '');
+  }
+}
+
+var liveIcon = L.divIcon({
+  className: '',
+  html: '<div style="position:relative;width:48px;height:48px;"><div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:48px;height:48px;border-radius:50%;background:rgba(0,240,255,0.15);border:2px solid rgba(0,240,255,0.6);animation:pulse-glow 1.5s ease-out infinite;"></div><div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:16px;height:16px;border-radius:50%;background:#ffffff;border:3px solid #00f0ff;box-shadow:0 0 15px #00f0ff;z-index:10;"></div></div>',
+  iconSize: [48, 48],
+  iconAnchor: [24, 24]
+});
+
+function placeMarker(lat, lon, accuracy) {
+  if (!map) return;
+  if (liveMarker) {
+    liveMarker.setLatLng([lat, lon]);
+    if (accuracyCircle) accuracyCircle.setLatLng([lat, lon]).setRadius(accuracy);
+  } else {
+    accuracyCircle = L.circle([lat, lon], { radius: accuracy, color: 'rgba(0,240,255,0.3)', fillColor: 'rgba(0,240,255,0.05)', fillOpacity: 1, weight: 1 }).addTo(map);
+    liveMarker = L.marker([lat, lon], { icon: liveIcon, zIndexOffset: 1000 }).addTo(map);
+  }
+}
+
+function onLocationFix(lat, lon, accuracy) {
+  if (gpsTimeoutId) { clearTimeout(gpsTimeoutId); gpsTimeoutId = null; }
+  placeMarker(lat, lon, accuracy);
+  userLat = lat; userLon = lon;
+  if (locationResolved) { if (TILES.length) updateYAHCard(lat, lon); return; }
+  locationResolved = true;
+  var btn = document.getElementById('locate-btn');
+  if (btn) {
+    btn.textContent = '⊕ TRACKING'; btn.classList.remove('locating');
+  }
+  var yahTitle = document.getElementById('yah-title');
+  if (yahTitle) {
+    yahTitle.textContent = accuracy < 500 ? 'GPS TELEMETRY' : 'APPROX LOCATION';
+  }
+  if (map) map.flyTo([lat, lon], 13, { duration: 1 });
+  var key = nearestCity(lat, lon);
+  if (key) {
+    setYAH('Location locked · Loading ' + CITY_META[key].name + ' telemetry...', 'var(--cyan)');
     loadCity(key);
   }
 }
-function onGPSFound(e){onLocationFix(e.latlng.lat,e.latlng.lng,e.accuracy);}
-function onGPSError(){
-  if(watchId!==null){navigator.geolocation.clearWatch(watchId);watchId=null;}
-  navigator.geolocation.getCurrentPosition(
-    function(pos){onLocationFix(pos.coords.latitude,pos.coords.longitude,pos.coords.accuracy);},
-    function(){
-      var btn=document.getElementById('locate-btn');
-      btn.textContent='⊕ LOCATE ME';btn.classList.remove('locating','locked');
-      setYAH('Could not get location.<br>Select your city above.','var(--amber)');
-      var p=document.getElementById('city-picker');p.style.boxShadow='0 0 0 2px var(--amber)';
-      setTimeout(function(){p.style.boxShadow='';},3000);
-    },
-    {enableHighAccuracy:false,timeout:8000,maximumAge:30000}
-  );
-}
-function startLocation(){
-  var btn=document.getElementById('locate-btn');
-  if(watchId!==null){
-    navigator.geolocation&&navigator.geolocation.clearWatch(watchId);watchId=null;
-    if(gpsTimeoutId){clearTimeout(gpsTimeoutId);gpsTimeoutId=null;}
-    if(liveMarker){map.removeLayer(liveMarker);liveMarker=null;}
-    if(accuracyCircle){map.removeLayer(accuracyCircle);accuracyCircle=null;}
-    locationResolved=false;userLat=null;userLon=null;
-    btn.textContent='⊕ LOCATE ME';btn.classList.remove('locating','locked');
-    setYAH('Press ⊕ LOCATE ME or select a city above','');return;
+
+function onGPSFound(e) {
+  if (!e) return;
+  var lat, lon, accuracy;
+  if (e.coords) {
+    lat = e.coords.latitude;
+    lon = e.coords.longitude;
+    accuracy = e.coords.accuracy || 100;
+  } else if (e.latlng) {
+    lat = e.latlng.lat;
+    lon = e.latlng.lng;
+    accuracy = e.accuracy || 100;
   }
-  if(!navigator.geolocation){setYAH('Location not supported. Select your city above.','var(--red)');return;}
-  btn.textContent='⊕ ACQUIRING...';btn.classList.add('locating');
-  setYAH('Locating...','var(--muted)');
-  var isMobile=/Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
-  var gpsTimeout=isMobile?30000:10000;
-  watchId=navigator.geolocation.watchPosition(onGPSFound,onGPSError,{enableHighAccuracy:true,timeout:gpsTimeout,maximumAge:5000});
-  gpsTimeoutId=setTimeout(function(){gpsTimeoutId=null;if(!locationResolved)onGPSError();},gpsTimeout+2000);
+  if (lat !== undefined && lon !== undefined) {
+    onLocationFix(lat, lon, accuracy);
+  }
 }
-map.on('click',function(e){
-  if(!FILTERED_TILES.length)return;
-  var t=nearestTile(e.latlng.lat,e.latlng.lng);if(!t)return;
-  var c=speedColor(t.dl);
-  document.getElementById('click-panel').style.display='block';
-  document.getElementById('click-info').innerHTML='<div style="font-family:\'Space Mono\',monospace;font-size:9px;color:var(--muted);margin-bottom:6px;">'+t.lat.toFixed(4)+'°N '+t.lon.toFixed(4)+'°E &bull; '+(t.isp||'Mixed')+'</div><div class="inspect-row"><span style="color:var(--muted)">↓ Download</span><span style="color:'+c+';font-weight:700">'+t.dl+' Mbps</span></div><div class="inspect-row"><span style="color:var(--muted)">↑ Upload</span><span style="color:#f72585;font-weight:700">'+t.ul+' Mbps</span></div><div class="inspect-row"><span style="color:var(--muted)">◎ Latency</span><span style="color:var(--amber);font-weight:700">'+t.latency+' ms</span></div>';
-  document.getElementById('m-title').textContent=t.lat.toFixed(3)+'°N '+t.lon.toFixed(3)+'°E';
-  document.getElementById('m-metrics').innerHTML='<span class="m-metric">↓ <span style="color:'+c+'">'+t.dl+' Mbps</span></span><span class="m-metric">↑ <span style="color:#f72585">'+t.ul+' Mbps</span></span><span class="m-metric">◎ <span style="color:var(--amber)">'+t.latency+' ms</span></span>';
+
+function onGPSError() {
+  if (watchId !== null) { navigator.geolocation.clearWatch(watchId); watchId = null; }
+  var btn = document.getElementById('locate-btn');
+  if (btn) {
+    btn.textContent = '⊕ LOCATE ME'; btn.classList.remove('locating');
+  }
+  setYAH('Location access unverified. Select your city above.', 'var(--amber)');
+}
+
+function startLocation() {
+  var btn = document.getElementById('locate-btn');
+  if (watchId !== null) {
+    if (navigator.geolocation) navigator.geolocation.clearWatch(watchId);
+    watchId = null;
+    if (liveMarker && map) { map.removeLayer(liveMarker); liveMarker = null; }
+    if (accuracyCircle && map) { map.removeLayer(accuracyCircle); accuracyCircle = null; }
+    locationResolved = false; userLat = null; userLon = null;
+    if (btn) { btn.textContent = '⊕ LOCATE ME'; btn.classList.remove('locating'); }
+    setYAH('Press ⊕ LOCATE ME or select a city above', ''); return;
+  }
+  if (!navigator.geolocation) { setYAH('Location API not supported.', 'var(--red)'); return; }
+  if (btn) { btn.textContent = '⊕ ACQUIRING...'; btn.classList.add('locating'); }
+  watchId = navigator.geolocation.watchPosition(onGPSFound, onGPSError, { enableHighAccuracy: true, timeout: 15000, maximumAge: 5000 });
+}
+
+function showInspectedTile(t) {
+  if (!t) return;
+  var c = speedColor(t.dl);
+  if (selectedTileHighlight && map) { map.removeLayer(selectedTileHighlight); }
+  var H = 0.002745;
+  if (map) {
+    selectedTileHighlight = L.rectangle([[t.lat - H, t.lon - H], [t.lat + H, t.lon + H]], {
+      color: '#ffffff',
+      weight: 2,
+      opacity: 0.95,
+      fillColor: c,
+      fillOpacity: 0.85
+    }).addTo(map);
+  }
+
+  var clickPanel = document.getElementById('click-panel');
+  if (clickPanel) clickPanel.style.display = 'block';
+  var clickInfo = document.getElementById('click-info');
+  if (clickInfo) {
+    clickInfo.innerHTML = `
+      <div class="yah-card pulse-glow-card">
+        <div style="font-family:var(--font-mono);font-size:10px;color:var(--muted);margin-bottom:6px">${t.lat.toFixed(4)}°N ${t.lon.toFixed(4)}°E &bull; ${t.isp || 'Mixed ISP'}</div>
+        <div class="yah-metric"><span class="yah-metric-label">↓ Download</span><span class="yah-metric-val" style="color:${c}">${t.dl} Mbps</span></div>
+        <div class="yah-metric"><span class="yah-metric-label">↑ Upload</span><span class="yah-metric-val" style="color:var(--purple)">${t.ul} Mbps</span></div>
+        <div class="yah-metric"><span class="yah-metric-label">◎ Latency</span><span class="yah-metric-val" style="color:var(--amber)">${t.latency} ms</span></div>
+        <div class="yah-metric"><span class="yah-metric-label">🏢 Dominant ISP</span><span class="yah-metric-val" style="color:var(--cyan)">${t.isp || 'Mixed ISP'}</span></div>
+      </div>
+    `;
+  }
+  var mTitle = document.getElementById('m-title');
+  if (mTitle) mTitle.textContent = (t.isp || 'Grid Point') + ' (' + t.lat.toFixed(4) + '°N, ' + t.lon.toFixed(4) + '°E)';
+  var mMetrics = document.getElementById('m-metrics');
+  if (mMetrics) {
+    mMetrics.innerHTML = `
+      <span>↓ <strong style="color:${c}">${t.dl} Mbps</strong></span>
+      <span>↑ <strong style="color:var(--purple)">${t.ul} Mbps</strong></span>
+      <span>◎ <strong style="color:var(--amber)">${t.latency} ms</strong></span>
+    `;
+  }
+}
+
+map.on('click', function(e) {
+  if (!e || !e.latlng || !FILTERED_TILES.length) return;
+  var t = nearestTile(e.latlng.lat, e.latlng.lng);
+  if (!t) {
+    clearInspectorPanel();
+    return;
+  }
+  showInspectedTile(t);
 });
 </script>
 </body>
 </html>
-
-
-
-
-
-
