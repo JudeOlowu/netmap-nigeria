@@ -1069,8 +1069,13 @@ function onLocationFix(lat, lon, accuracy) {
   if (map) map.flyTo([lat, lon], 13, { duration: 1 });
   var key = nearestCity(lat, lon);
   if (key) {
-    setYAH('Location locked · Loading ' + CITY_META[key].name + ' telemetry...', 'var(--cyan)');
-    loadCity(key);
+    var cityName = CITY_META[key] ? CITY_META[key].name : key;
+    var msg = 'Location locked · Loading ' + cityName + ' telemetry...';
+    if (accuracy > 10000) {
+      msg += '<br><span style="font-size:9px;color:var(--amber)">Note: ISP IP routing detected. If in another city, select from dropdown above.</span>';
+    }
+    setYAH(msg, 'var(--cyan)');
+    loadCity(key, true);
   }
 }
 
@@ -1113,7 +1118,7 @@ function startLocation() {
   }
   if (!navigator.geolocation) { setYAH('Location API not supported.', 'var(--red)'); return; }
   if (btn) { btn.textContent = '⊕ ACQUIRING...'; btn.classList.add('locating'); }
-  watchId = navigator.geolocation.watchPosition(onGPSFound, onGPSError, { enableHighAccuracy: true, timeout: 15000, maximumAge: 5000 });
+  watchId = navigator.geolocation.watchPosition(onGPSFound, onGPSError, { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 });
 }
 
 function showInspectedTile(t) {
